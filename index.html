@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>렌탈 견적 계산기 (기능 확인용)</title>
+<style>
+  body { font-family: sans-serif; margin: 20px; color: #222; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 16px; margin-top: 24px; }
+  nav button { padding: 8px 16px; border: 1px solid #999; background: #eee; cursor: pointer; }
+  nav button.on { background: #333; color: #fff; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  th, td { border: 1px solid #999; padding: 6px 8px; text-align: left; }
+  th { background: #eee; }
+  td.num, th.num { text-align: right; }
+  td input, td select { width: 100%; box-sizing: border-box; padding: 4px; }
+  td input.num { text-align: right; }
+  button { padding: 5px 10px; cursor: pointer; }
+  .bar { margin: 10px 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .info label { display: inline-block; margin: 0 14px 8px 0; }
+  .note { color: #666; font-size: 13px; }
+  .total th { width: 200px; }
+  .total .big td { font-weight: bold; font-size: 17px; }
+  .only-print { display: none; }
+  @media print {
+    nav, .no-print, #page-db { display: none !important; }
+    #page-quote { display: block !important; }
+    .only-print { display: block; }
+    td input, td select, .info input { border: none; padding: 0; appearance: none; background: none; font: inherit; color: inherit; }
+  }
+</style>
+</head>
+<body>
+
+<h1 class="no-print">렌탈 견적 계산기 <span class="note">기능 확인용</span></h1>
+<nav>
+  <button id="tab-quote" class="on" onclick="showPage('quote')">견적서</button>
+  <button id="tab-db" onclick="showPage('db')">데이터베이스 (렌탈료·할인가)</button>
+</nav>
+
+<!-- ───────── 데이터베이스 시트 ───────── -->
+<section id="page-db" hidden>
+  <h2>제품 데이터베이스</h2>
+  <p class="note">셀을 수정하면 바로 저장되고 견적서 화면에 반영됩니다. (이 브라우저에만 저장)</p>
+  <div class="bar">
+    <button onclick="addProduct()">+ 제품 추가</button>
+    <button onclick="exportDb()">내보내기 (JSON)</button>
+    <button onclick="document.getElementById('importFile').click()">가져오기 (JSON)</button>
+    <input type="file" id="importFile" accept=".json" hidden onchange="importDb(this)">
+    <button onclick="resetDb()">예시 데이터로 초기화</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>분류</th><th>제품명</th><th>모델명</th>
+        <th class="num">월 렌탈료 (원)</th><th class="num">월 할인가 (원)</th>
+        <th class="num">할인율</th><th>비고</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="dbBody"></tbody>
+  </table>
+</section>
+
+<!-- ───────── 견적서 ───────── -->
+<section id="page-quote">
+  <h1 class="only-print">렌탈 견적서</h1>
+  <h2 class="no-print">견적서 작성</h2>
+
+  <div class="info">
+    <label>고객명 <input id="qCustomer" oninput="saveQuote()"></label>
+    <label>연락처 <input id="qPhone" oninput="saveQuote()"></label>
+    <label>견적일 <input id="qDate" type="date" oninput="saveQuote()"></label>
+    <label>약정기간(개월) <input id="qMonths" type="number" min="1" style="width:70px" oninput="saveQuote(); renderQuote()"></label>
+    <label>담당자 <input id="qStaff" oninput="saveQuote()"></label>
+  </div>
+
+  <div class="bar no-print">
+    <button onclick="addItem()">+ 품목 추가</button>
+    <button onclick="clearQuote()">견적 비우기</button>
+    <button onclick="window.print()">견적서 인쇄 / PDF 저장</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px">No</th><th>제품</th><th>모델명</th>
+        <th class="num">월 렌탈료</th><th class="num">월 할인가</th>
+        <th class="num" style="width:80px">수량</th>
+        <th class="num">월 납부액</th><th class="no-print"></th>
+      </tr>
+    </thead>
+    <tbody id="quoteBody"></tbody>
+  </table>
+
+  <h2>합계</h2>
+  <table class="total">
+    <tr><th>월 렌탈료 합계 (정가)</th><td class="num" id="tList"></td></tr>
+    <tr><th>월 할인 금액</th><td class="num" id="tDiscount"></td></tr>
+    <tr class="big"><th>월 납부액 (할인 적용)</th><td class="num" id="tMonthly"></td></tr>
+    <tr><th>약정기간 총 납부액</th><td class="num" id="tTotal"></td></tr>
+    <tr><th>약정기간 총 할인액</th><td class="num" id="tTotalDiscount"></td></tr>
+  </table>
+  <p class="note">※ 부가세 포함 여부, 등록비·설치비 등은 아직 반영하지 않았습니다.</p>
+</section>
+
+<script>
+// ───────── 데이터 ─────────
+// 예시 데이터입니다. 실제 제품/금액은 데이터베이스 탭에서 수정하세요.
+const SAMPLE = [
+  { id: 1, category: '정수기',     name: '예시 정수기 A',     model: 'WP-100', price: 35900, sale: 29900, memo: '' },
+  { id: 2, category: '정수기',     name: '예시 정수기 B',     model: 'WP-200', price: 45900, sale: 38900, memo: '' },
+  { id: 3, category: '공기청정기', name: '예시 공기청정기 A', model: 'AP-100', price: 29900, sale: 24900, memo: '' },
+  { id: 4, category: '비데',       name: '예시 비데 A',       model: 'BD-100', price: 21900, sale: 17900, memo: '' },
+];
+const DB_KEY = 'rental-db-v1', QUOTE_KEY = 'rental-quote-v1';
+
+function load(key, fallback) {
+  try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; }
+  catch { return fallback; }
+}
+let db = load(DB_KEY, structuredClone(SAMPLE));
+let quote = load(QUOTE_KEY, null) || { customer: '', phone: '', date: '', months: 36, staff: '', items: [] };
+
+const saveDb = () => localStorage.setItem(DB_KEY, JSON.stringify(db));
+const won = n => (Number(n) || 0).toLocaleString('ko-KR') + '원';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const nextId = () => db.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+
+// ───────── 화면 전환 ─────────
+function showPage(name) {
+  for (const p of ['quote', 'db']) {
+    document.getElementById('page-' + p).hidden = p !== name;
+    document.getElementById('tab-' + p).classList.toggle('on', p === name);
+  }
+  if (name === 'quote') renderQuote(); else renderDb();
+}
+
+// ───────── 데이터베이스 시트 ─────────
+function rate(p) {
+  return p.price > 0 ? Math.round((1 - p.sale / p.price) * 1000) / 10 + '%' : '-';
+}
+function renderDb() {
+  document.getElementById('dbBody').innerHTML = db.map(p => `
+    <tr>
+      <td><input value="${esc(p.category)}" oninput="editDb(${p.id}, 'category', this)"></td>
+      <td><input value="${esc(p.name)}" oninput="editDb(${p.id}, 'name', this)"></td>
+      <td><input value="${esc(p.model)}" oninput="editDb(${p.id}, 'model', this)"></td>
+      <td><input class="num" type="number" min="0" value="${p.price}" oninput="editDb(${p.id}, 'price', this)"></td>
+      <td><input class="num" type="number" min="0" value="${p.sale}" oninput="editDb(${p.id}, 'sale', this)"></td>
+      <td class="num" id="rate-${p.id}">${rate(p)}</td>
+      <td><input value="${esc(p.memo)}" oninput="editDb(${p.id}, 'memo', this)"></td>
+      <td><button onclick="removeProduct(${p.id})">삭제</button></td>
+    </tr>`).join('') || '<tr><td colspan="8">등록된 제품이 없습니다.</td></tr>';
+}
+function editDb(id, field, el) {
+  const p = db.find(x => x.id === id);
+  p[field] = (field === 'price' || field === 'sale') ? (Number(el.value) || 0) : el.value;
+  document.getElementById('rate-' + id).textContent = rate(p);
+  saveDb();
+}
+function addProduct() {
+  db.push({ id: nextId(), category: '', name: '', model: '', price: 0, sale: 0, memo: '' });
+  saveDb(); renderDb();
+}
+function removeProduct(id) {
+  if (!confirm('이 제품을 삭제할까요?')) return;
+  db = db.filter(p => p.id !== id);
+  quote.items = quote.items.filter(i => i.productId !== id);
+  saveDb(); saveQuote(); renderDb();
+}
+function resetDb() {
+  if (!confirm('현재 데이터를 지우고 예시 데이터로 되돌릴까요?')) return;
+  db = structuredClone(SAMPLE); quote.items = [];
+  saveDb(); saveQuote(); renderDb();
+}
+function exportDb() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' }));
+  a.download = 'rental-db.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importDb(input) {
+  const file = input.files[0];
+  if (!file) return;
+  file.text().then(text => {
+    const rows = JSON.parse(text);
+    if (!Array.isArray(rows)) throw new Error();
+    db = rows.map((r, i) => ({
+      id: i + 1, category: r.category || '', name: r.name || '', model: r.model || '',
+      price: Number(r.price) || 0, sale: Number(r.sale) || 0, memo: r.memo || '',
+    }));
+    quote.items = [];
+    saveDb(); saveQuote(); renderDb();
+  }).catch(() => alert('파일을 읽을 수 없습니다. 내보내기로 만든 JSON 파일인지 확인해주세요.'));
+  input.value = '';
+}
+
+// ───────── 견적서 ─────────
+const FIELDS = { customer: 'qCustomer', phone: 'qPhone', date: 'qDate', months: 'qMonths', staff: 'qStaff' };
+
+function saveQuote() {
+  for (const [k, id] of Object.entries(FIELDS)) {
+    const el = document.getElementById(id);
+    if (el) quote[k] = k === 'months' ? (Number(el.value) || 0) : el.value;
+  }
+  localStorage.setItem(QUOTE_KEY, JSON.stringify(quote));
+}
+function fillQuoteForm() {
+  if (!quote.date) quote.date = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD
+  for (const [k, id] of Object.entries(FIELDS)) document.getElementById(id).value = quote[k];
+}
+function addItem() {
+  if (!db.length) return alert('데이터베이스에 제품을 먼저 등록해주세요.');
+  quote.items.push({ productId: db[0].id, qty: 1 });
+  saveQuote(); renderQuote();
+}
+function removeItem(i) { quote.items.splice(i, 1); saveQuote(); renderQuote(); }
+function setItem(i, field, value) {
+  quote.items[i][field] = field === 'qty' ? Math.max(1, Math.floor(Number(value)) || 1) : Number(value);
+  saveQuote(); renderQuote();
+}
+function clearQuote() {
+  if (!confirm('견적 내용을 모두 지울까요?')) return;
+  quote = { customer: '', phone: '', date: '', months: 36, staff: '', items: [] };
+  fillQuoteForm(); saveQuote(); renderQuote();
+}
+function renderQuote() {
+  let list = 0, monthly = 0;
+  const rows = quote.items.map((it, i) => {
+    const p = db.find(x => x.id === it.productId);
+    if (!p) return '';
+    list += p.price * it.qty;
+    monthly += p.sale * it.qty;
+    const options = db.map(x =>
+      `<option value="${x.id}" ${x.id === p.id ? 'selected' : ''}>${esc(x.category ? `[${x.category}] ` : '')}${esc(x.name || '(이름 없음)')}</option>`).join('');
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td><select onchange="setItem(${i}, 'productId', this.value)">${options}</select></td>
+        <td>${esc(p.model)}</td>
+        <td class="num">${won(p.price)}</td>
+        <td class="num">${won(p.sale)}</td>
+        <td><input class="num" type="number" min="1" value="${it.qty}" onchange="setItem(${i}, 'qty', this.value)"></td>
+        <td class="num">${won(p.sale * it.qty)}</td>
+        <td class="no-print"><button onclick="removeItem(${i})">삭제</button></td>
+      </tr>`;
+  }).join('');
+  document.getElementById('quoteBody').innerHTML =
+    rows || '<tr><td colspan="8">"+ 품목 추가"를 눌러 제품을 선택하세요.</td></tr>';
+
+  const months = Number(quote.months) || 0;
+  document.getElementById('tList').textContent = won(list);
+  document.getElementById('tDiscount').textContent = '-' + won(list - monthly);
+  document.getElementById('tMonthly').textContent = won(monthly);
+  document.getElementById('tTotal').textContent = `${won(monthly * months)} (${months}개월)`;
+  document.getElementById('tTotalDiscount').textContent = '-' + won((list - monthly) * months);
+}
+
+fillQuoteForm();
+renderQuote();
+</script>
+</body>
+</html>
