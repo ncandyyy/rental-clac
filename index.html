@@ -5,23 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>렌탈 견적 계산기 (기능 확인용)</title>
 <style>
-  body { font-family: sans-serif; margin: 20px; color: #222; }
+  body { font-family: sans-serif; margin: 20px; color: #222; font-size: 14px; }
   h1 { font-size: 20px; }
-  h2 { font-size: 16px; margin-top: 24px; }
+  h2 { font-size: 16px; margin-top: 28px; }
   nav button { padding: 8px 16px; border: 1px solid #999; background: #eee; cursor: pointer; }
   nav button.on { background: #333; color: #fff; }
+  .scroll { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-  th, td { border: 1px solid #999; padding: 6px 8px; text-align: left; }
-  th { background: #eee; }
-  td.num, th.num { text-align: right; }
-  td input, td select { width: 100%; box-sizing: border-box; padding: 4px; }
-  td input.num { text-align: right; }
+  th, td { border: 1px solid #999; padding: 5px 7px; text-align: left; vertical-align: middle; }
+  th { background: #eee; white-space: nowrap; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td input, td select { width: 100%; box-sizing: border-box; padding: 4px; font: inherit; }
+  td input.num { text-align: right; min-width: 80px; }
+  td input.txt { min-width: 150px; }
+  td input.name { min-width: 250px; }
+  td input[type=checkbox] { width: auto; }
   button { padding: 5px 10px; cursor: pointer; }
   .bar { margin: 10px 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .info label { display: inline-block; margin: 0 14px 8px 0; }
-  .note { color: #666; font-size: 13px; }
-  .total th { width: 200px; }
-  .total .big td { font-weight: bold; font-size: 17px; }
+  .note { color: #666; font-size: 13px; font-weight: normal; }
+  .tbd { background: #fff6b3; }           /* 임시값 - 확정 필요 */
+  .bad { background: #ffd0d0; }           /* 세트가가 단품 합계보다 비쌈 */
+  .calc { background: #f7f7f7; }          /* 자동 계산 칸 */
+  .comp-edit { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .comp-edit label { white-space: nowrap; }
+  .comp-edit input { width: 50px; text-align: right; }
+  .total th { width: 240px; }
+  .total .big td, .total .big th { font-weight: bold; font-size: 17px; }
+  .conds li { margin: 3px 0; }
   .only-print { display: none; }
   @media print {
     nav, .no-print, #page-db { display: none !important; }
@@ -33,33 +44,58 @@
 </head>
 <body>
 
-<h1 class="no-print">렌탈 견적 계산기 <span class="note">기능 확인용</span></h1>
+<h1 class="no-print">렌탈 견적 계산기 <span class="note">기능 확인용 · 모든 금액은 월 렌탈료(VAT 별도)</span></h1>
 <nav>
   <button id="tab-quote" class="on" onclick="showPage('quote')">견적서</button>
-  <button id="tab-db" onclick="showPage('db')">데이터베이스 (렌탈료·할인가)</button>
+  <button id="tab-db" onclick="showPage('db')">데이터베이스 (단품가·세트가)</button>
 </nav>
 
-<!-- ───────── 데이터베이스 시트 ───────── -->
+<!-- ───────── 데이터베이스 ───────── -->
 <section id="page-db" hidden>
-  <h2>제품 데이터베이스</h2>
-  <p class="note">셀을 수정하면 바로 저장되고 견적서 화면에 반영됩니다. (이 브라우저에만 저장)</p>
+  <p class="note">
+    칸을 수정하면 바로 저장되고 견적서에 반영됩니다. (이 브라우저에만 저장)<br>
+    회색 칸 = 자동 계산 · <span class="tbd">노란 줄</span> = 임시값(확정 필요) ·
+    <span class="bad">붉은 칸</span> = 세트 일반가가 단품 합계보다 비싼 경우
+  </p>
   <div class="bar">
-    <button onclick="addProduct()">+ 제품 추가</button>
     <button onclick="exportDb()">내보내기 (JSON)</button>
     <button onclick="document.getElementById('importFile').click()">가져오기 (JSON)</button>
     <input type="file" id="importFile" accept=".json" hidden onchange="importDb(this)">
-    <button onclick="resetDb()">예시 데이터로 초기화</button>
+    <button onclick="resetDb()">기준표(26.11.11)로 초기화</button>
   </div>
-  <table>
-    <thead>
-      <tr>
-        <th>분류</th><th>제품명</th><th>모델명</th>
-        <th class="num">월 렌탈료 (원)</th><th class="num">월 할인가 (원)</th>
-        <th class="num">할인율</th><th>비고</th><th></th>
-      </tr>
-    </thead>
-    <tbody id="dbBody"></tbody>
-  </table>
+
+  <h2>① 단품가 <span class="note">장비별 정상가 / 행사가 — 세트의 정상가 합계와 추가 장비 계산에 사용</span></h2>
+  <div class="bar"><button onclick="addItem()">+ 단품 추가</button></div>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>품목</th><th>분류</th>
+        <th class="num">단품 정상가</th><th class="num">단품 행사가</th><th class="num">행사 할인</th>
+        <th>확정 필요</th><th>비고</th><th></th>
+      </tr></thead>
+      <tbody id="itemBody"></tbody>
+    </table>
+  </div>
+
+  <h2>② 세트가 <span class="note">세트 일반가·행사가는 확정 금액으로 입력 — 할인액은 역산해서 자동 표시</span></h2>
+  <p class="note">
+    세트 할인 = 단품가 합계 − 세트 일반가 · 이벤트 할인 = 세트 일반가 − 행사가 ·
+    최종 = 행사가(비어 있으면 일반가) · 무상렌탈은 일반가 0원
+  </p>
+  <div class="bar"><button onclick="addSet()">+ 세트 추가</button></div>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>No</th><th>구분</th><th>상품 구성</th><th>유형</th><th>구성 장비</th>
+        <th class="num">단품가 합계<br>(정상가)</th>
+        <th class="num">세트 일반가</th><th class="num">행사가</th>
+        <th class="num">세트 할인</th><th class="num">이벤트 할인</th><th class="num">총 할인</th>
+        <th class="num">최종 월렌탈료</th><th class="num">VAT 포함</th>
+        <th>매출·특별조건</th><th>직원 확인</th><th>비고</th><th></th>
+      </tr></thead>
+      <tbody id="setBody"></tbody>
+    </table>
+  </div>
 </section>
 
 <!-- ───────── 견적서 ───────── -->
@@ -68,7 +104,7 @@
   <h2 class="no-print">견적서 작성</h2>
 
   <div class="info">
-    <label>고객명 <input id="qCustomer" oninput="saveQuote()"></label>
+    <label>고객명(상호) <input id="qCustomer" oninput="saveQuote()"></label>
     <label>연락처 <input id="qPhone" oninput="saveQuote()"></label>
     <label>견적일 <input id="qDate" type="date" oninput="saveQuote()"></label>
     <label>약정기간(개월) <input id="qMonths" type="number" min="1" style="width:70px" oninput="saveQuote(); renderQuote()"></label>
@@ -76,56 +112,144 @@
   </div>
 
   <div class="bar no-print">
-    <button onclick="addItem()">+ 품목 추가</button>
+    <button onclick="addLine('set')">+ 세트 추가</button>
+    <button onclick="addLine('item')">+ 추가 장비(단품) 추가</button>
     <button onclick="clearQuote()">견적 비우기</button>
     <button onclick="window.print()">견적서 인쇄 / PDF 저장</button>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th style="width:40px">No</th><th>제품</th><th>모델명</th>
-        <th class="num">월 렌탈료</th><th class="num">월 할인가</th>
-        <th class="num" style="width:80px">수량</th>
-        <th class="num">월 납부액</th><th class="no-print"></th>
-      </tr>
-    </thead>
-    <tbody id="quoteBody"></tbody>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th style="width:36px">No</th><th style="width:80px">구분</th><th>상품</th>
+        <th class="num">정상가</th><th class="num">세트 할인</th><th class="num">이벤트 할인</th>
+        <th class="num">월 렌탈료</th><th class="num" style="width:70px">수량</th>
+        <th class="num">금액</th><th class="no-print"></th>
+      </tr></thead>
+      <tbody id="quoteBody"></tbody>
+    </table>
+  </div>
+
+  <div class="bar no-print">
+    <label>특별 할인(월) <input id="qSpecial" type="number" min="0" step="1000" style="width:100px; text-align:right" oninput="saveQuote(); renderQuote()"> 원</label>
+    <label>사유 메모 <input id="qSpecialMemo" style="width:300px" placeholder="내부용 · 견적서에는 인쇄되지 않음" oninput="saveQuote()"></label>
+  </div>
+
+  <h2>합계 <span class="note">월 기준</span></h2>
+  <table class="total">
+    <tr><th>정상가 합계</th><td class="num" id="tList"></td></tr>
+    <tr><th>세트 할인</th><td class="num" id="tSet"></td></tr>
+    <tr><th>이벤트 할인</th><td class="num" id="tEvent"></td></tr>
+    <tr id="rowSpecial"><th>특별 할인</th><td class="num" id="tSpecial"></td></tr>
+    <tr class="big"><th>최종 월 렌탈료 (VAT 별도)</th><td class="num" id="tFinal"></td></tr>
+    <tr class="big"><th>최종 월 렌탈료 (VAT 포함)</th><td class="num" id="tVat"></td></tr>
+    <tr><th>약정기간 총 납부액 (VAT 포함)</th><td class="num" id="tTotal"></td></tr>
   </table>
 
-  <h2>합계</h2>
-  <table class="total">
-    <tr><th>월 렌탈료 합계 (정가)</th><td class="num" id="tList"></td></tr>
-    <tr><th>월 할인 금액</th><td class="num" id="tDiscount"></td></tr>
-    <tr class="big"><th>월 납부액 (할인 적용)</th><td class="num" id="tMonthly"></td></tr>
-    <tr><th>약정기간 총 납부액</th><td class="num" id="tTotal"></td></tr>
-    <tr><th>약정기간 총 할인액</th><td class="num" id="tTotalDiscount"></td></tr>
-  </table>
-  <p class="note">※ 부가세 포함 여부, 등록비·설치비 등은 아직 반영하지 않았습니다.</p>
+  <div id="condBox">
+    <h2>적용 조건 · 확인 사항</h2>
+    <ul class="conds" id="condList"></ul>
+  </div>
 </section>
 
 <script>
-// ───────── 데이터 ─────────
-// 예시 데이터입니다. 실제 제품/금액은 데이터베이스 탭에서 수정하세요.
-const SAMPLE = [
-  { id: 1, category: '정수기',     name: '예시 정수기 A',     model: 'WP-100', price: 35900, sale: 29900, memo: '' },
-  { id: 2, category: '정수기',     name: '예시 정수기 B',     model: 'WP-200', price: 45900, sale: 38900, memo: '' },
-  { id: 3, category: '공기청정기', name: '예시 공기청정기 A', model: 'AP-100', price: 29900, sale: 24900, memo: '' },
-  { id: 4, category: '비데',       name: '예시 비데 A',       model: 'BD-100', price: 21900, sale: 17900, memo: '' },
+// ───────── 기준 데이터 (26.11.11 렌탈정책 / 렌탈_단품가_세트가_정리.xlsx) ─────────
+// 단품: [id, 품목, 분류, 정상가, 행사가, 확정필요, 비고]
+const BASE_ITEMS = [
+  [1, '프론트', '단말기', 3000, 3000, 0, ''],
+  [2, 'N커넥트', '단말기', 3000, 3000, 1, '기준표에 단품가 없음. 기타포스기 세트에서 역산'],
+  [3, 'CAT단말기', '단말기', 5000, 4000, 0, ''],
+  [4, '터미널2', '단말기', 3000, 3000, 0, ''],
+  [5, '유선프린터', '프린터', 3000, 3000, 0, ''],
+  [6, '무선프린터(TS400)', '프린터', 4000, 4000, 0, ''],
+  [7, '무선프린터(TS400EB)', '프린터', 5000, 5000, 0, ''],
+  [8, '태블릿(레노버 IDEA TAB 11)', '태블릿', 9000, 8000, 0, ''],
+  [9, '거치대', '태블릿', 0, 0, 1, '기준표에 단품가 없음. 정상가 확정 필요'],
+  [10, '토스포스기', '포스', 16000, 16000, 1, '토스포스기+금전함 합산 역산값. 금전함과 나눠서 확정 필요'],
+  [11, '기타포스기', '포스', 18000, 18000, 1, '기타포스기+금전함 합산 역산값. 금전함과 나눠서 확정 필요'],
+  [12, '금전함', '포스', 0, 0, 1, '포스기 역산값에 포함시켜 0원 처리. 정상가 확정 필요'],
+  [13, '오더포스(주문)', '포스', 15000, 15000, 0, ''],
+  [14, '포스기 듀얼모니터', '포스', 4000, 4000, 0, ''],
+  [15, '토스POS 키오스크(데스크형)+리더기', '키오스크', 40000, 40000, 1, '세트로만 판매. 세트 일반가 그대로'],
+  [16, '토스POS 키오스크(스텐드형)+리더기', '키오스크', 42000, 42000, 1, '세트로만 판매. 세트 일반가 그대로'],
+  [17, '기타POS 키오스크(데스크형)+리더기', '키오스크', 42000, 42000, 1, '세트로만 판매. 세트 일반가 그대로'],
+  [18, '기타POS 키오스크(스텐드형)+리더기', '키오스크', 44000, 44000, 1, '세트로만 판매. 세트 일반가 그대로'],
 ];
-const DB_KEY = 'rental-db-v1', QUOTE_KEY = 'rental-quote-v1';
-
-function load(key, fallback) {
-  try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; }
-  catch { return fallback; }
+// 세트: [구분, 상품 구성, 유형, 일반가, 행사가(null=없음), 매출·특별조건, 직원 확인, 비고, 구성 단품 id 목록]
+const PAID = '3년 약정 / CMS 필수', FREE = '내부 승인 필요 / 3년 약정 / CMS 조건부';
+const BASE_SETS = [
+  ['단말기', 'N커넥트+CAT단말기', '유료렌탈', 5000, 4000, '', PAID, '', [2, 3]],
+  ['단말기', '토스프론트+터미널2', '유료렌탈', 5000, 4000, '', PAID, '', [1, 4]],
+  ['단말기', '토스프론트+유선프린트', '유료렌탈', 5000, 4000, '', PAID, '', [1, 5]],
+  ['단말기', '토스프론트+CAT단말기', '유료렌탈', 7000, 5000, '', PAID, '', [1, 3]],
+  ['단말기', '토스프론트+무선프린터', '유료렌탈', 8000, 7000, '', PAID, '무선프린터를 TS400(4,000원)으로 가정. TS400EB면 단품합 8,000원', [1, 6]],
+  ['단말기', '토스프론트+터미널2(or카드단말기)', '무상렌탈', 0, null, '월 카드매출 2천만원 이상 (이벤트 상품은 매출 관계없음)', FREE, '', [1, 4]],
+  ['단말기', 'N커넥트+CAT단말기', '무상렌탈', 0, null, '적용 조건 상담 전 확인', FREE, '원본에서 위 행과 매출조건 병합 표시', [2, 3]],
+  ['포스기세트', '토스포스기+프론트+터미널2+금전함', '무상렌탈', 0, null, '월 카드매출 3천만원 이상', FREE, '', [1, 4, 10, 12]],
+  ['포스기세트', '토스포스기+프론트+터미널+금전함+오더포스+유프', '무상렌탈', 0, null, '월 카드매출 6천만원 이상', FREE, "'터미널'을 터미널2로 가정", [1, 4, 5, 10, 12, 13]],
+  ['포스기세트', '토스포스기+프론트+터미널2+금전함', '유료렌탈', 17000, null, '월 카드매출 2천만원 이상', PAID, '아래 같은 구성(22,000/20,000원)과 가격이 다름. 매출조건부 가격인지 확인', [1, 4, 10, 12]],
+  ['포스기세트', '기타포스기+N커넥트+유프+금전함', '유료렌탈', 24000, 22000, '', PAID, '', [2, 5, 11, 12]],
+  ['포스기세트', '기타포스기+N커넥트+CAT단말기+금전함', '유료렌탈', 25000, 23000, '', PAID, '', [2, 3, 11, 12]],
+  ['포스기세트', '기타포스기+N커넥트+CAT단말기+유프+금전함', '유료렌탈', 27000, 25000, '', PAID, '', [2, 3, 5, 11, 12]],
+  ['포스기세트', '토스포스기+프론트+유프+금전함', '유료렌탈', 22000, 20000, '', PAID, '', [1, 5, 10, 12]],
+  ['포스기세트', '토스포스기+프론트+터미널2+금전함', '유료렌탈', 22000, 20000, '', PAID, '', [1, 4, 10, 12]],
+  ['포스기세트', '토스포스기+프론트+터미널2+유프+금전함', '유료렌탈', 25000, 23000, '', PAID, '', [1, 4, 5, 10, 12]],
+  ['포스기세트', '기타포스기+프론트+유프+금전함', '유료렌탈', 24000, 22000, '', PAID, '', [1, 5, 11, 12]],
+  ['포스기세트', '기타포스기+프론트+터미널2+금전함', '유료렌탈', 24000, 22000, '', PAID, '', [1, 4, 11, 12]],
+  ['포스기세트', '기타포스기+프론트+터미널2+유프+금전함', '유료렌탈', 27000, 25000, '', PAID, '', [1, 4, 5, 11, 12]],
+  ['태블릿', '태블릿+N커넥트+CAT단말기+거치대', '유료렌탈', 12000, 11000, '', PAID, '', [2, 3, 8, 9]],
+  ['태블릿', '태블릿+프론트+거치대', '유료렌탈', 9000, 7000, '', PAID, '', [1, 8, 9]],
+  ['태블릿', '태블릿+프론트+유프+거치대', '유료렌탈', 10000, 9000, '', PAID, '', [1, 5, 8, 9]],
+  ['태블릿', '태블릿+프론트+터미널2+거치대', '유료렌탈', 10000, 9000, '', PAID, '', [1, 4, 8, 9]],
+  ['태블릿', '태블릿+프론트+무선프린터+거치대', '유료렌탈', 12000, 10000, '', PAID, '무선프린터를 TS400으로 가정', [1, 6, 8, 9]],
+  ['키오스크', '토스POS 베리어키오스크(데스크형)+리더기', '유료렌탈', 40000, 38000, '', PAID, '', [15]],
+  ['키오스크', '토스POS 베리어키오스크(스텐드형)+리더기', '유료렌탈', 42000, 39000, '', PAID, '', [16]],
+  ['키오스크', '기타POS 베리어키오스크(데스크형)+리더기', '유료렌탈', 42000, 40000, '', PAID, '', [17]],
+  ['키오스크', '기타POS 베리어키오스크(스텐드형)+리더기', '유료렌탈', 44000, 41000, '', PAID, '', [18]],
+];
+function baseDb() {
+  return {
+    items: BASE_ITEMS.map(([id, name, category, price, sale, tbd, memo]) => ({ id, name, category, price, sale, tbd: !!tbd, memo })),
+    sets: BASE_SETS.map(([group, name, type, price, sale, cond, check, memo, comp], i) => ({
+      id: i + 1, group, name, type, price, sale, cond, check, memo,
+      comp: Object.fromEntries(comp.map(itemId => [itemId, 1])),   // { 단품 id: 수량 }
+    })),
+  };
 }
-let db = load(DB_KEY, structuredClone(SAMPLE));
-let quote = load(QUOTE_KEY, null) || { customer: '', phone: '', date: '', months: 36, staff: '', items: [] };
+
+// ───────── 저장소 ─────────
+const DB_KEY = 'rental-db-v2', QUOTE_KEY = 'rental-quote-v2';
+function load(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+const emptyQuote = () => ({ customer: '', phone: '', date: '', months: 36, staff: '', special: 0, specialMemo: '', lines: [] });
+let db = load(DB_KEY) || baseDb();
+let quote = load(QUOTE_KEY) || emptyQuote();
+let openComp = null;   // 구성 수정 중인 세트 id
 
 const saveDb = () => localStorage.setItem(DB_KEY, JSON.stringify(db));
 const won = n => (Number(n) || 0).toLocaleString('ko-KR') + '원';
+const disc = n => n === 0 ? '0원' : (n > 0 ? '-' : '+') + won(Math.abs(n));   // 할인 표시 (음수 할인은 +)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const nextId = () => db.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+const nextId = list => list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+const itemById = id => db.items.find(x => x.id === Number(id));
+
+// ───────── 계산 (엑셀 '세트가' 시트와 같은 식) ─────────
+function calcSet(s) {
+  const list = Object.entries(s.comp).reduce((sum, [id, qty]) => sum + (itemById(id)?.price || 0) * qty, 0);
+  const hasSale = s.sale !== null && s.sale !== '';
+  const final = hasSale ? Number(s.sale) : s.price;
+  return {
+    list,                                        // 단품가 합계(정상가)
+    setDisc: list - s.price,                     // 세트 할인
+    eventDisc: hasSale ? s.price - final : 0,    // 이벤트 할인
+    total: list - final,                         // 총 할인
+    final,                                       // 최종 월렌탈료 (VAT 별도)
+    vat: Math.round(final * 1.1),
+  };
+}
+const compText = s => Object.entries(s.comp).map(([id, qty]) =>
+  (itemById(id)?.name || '?') + (qty > 1 ? '×' + qty : '')).join(', ') || '(없음)';
 
 // ───────── 화면 전환 ─────────
 function showPage(name) {
@@ -136,42 +260,125 @@ function showPage(name) {
   if (name === 'quote') renderQuote(); else renderDb();
 }
 
-// ───────── 데이터베이스 시트 ─────────
-function rate(p) {
-  return p.price > 0 ? Math.round((1 - p.sale / p.price) * 1000) / 10 + '%' : '-';
+// ───────── 데이터베이스: 단품가 ─────────
+function renderDb() { renderItems(); renderSets(); }
+
+function renderItems() {
+  document.getElementById('itemBody').innerHTML = db.items.map(p => `
+    <tr id="item-${p.id}" class="${p.tbd ? 'tbd' : ''}">
+      <td><input class="name" value="${esc(p.name)}" oninput="editItem(${p.id}, 'name', this)"></td>
+      <td><input value="${esc(p.category)}" oninput="editItem(${p.id}, 'category', this)"></td>
+      <td><input class="num" type="number" min="0" step="1000" value="${p.price}" oninput="editItem(${p.id}, 'price', this)"></td>
+      <td><input class="num" type="number" min="0" step="1000" value="${p.sale}" oninput="editItem(${p.id}, 'sale', this)"></td>
+      <td class="num calc" id="item-disc-${p.id}">${won(p.price - p.sale)}</td>
+      <td><input type="checkbox" ${p.tbd ? 'checked' : ''} onchange="editItem(${p.id}, 'tbd', this)"></td>
+      <td><input class="txt" value="${esc(p.memo)}" oninput="editItem(${p.id}, 'memo', this)"></td>
+      <td><button onclick="removeItem(${p.id})">삭제</button></td>
+    </tr>`).join('');
 }
-function renderDb() {
-  document.getElementById('dbBody').innerHTML = db.map(p => `
-    <tr>
-      <td><input value="${esc(p.category)}" oninput="editDb(${p.id}, 'category', this)"></td>
-      <td><input value="${esc(p.name)}" oninput="editDb(${p.id}, 'name', this)"></td>
-      <td><input value="${esc(p.model)}" oninput="editDb(${p.id}, 'model', this)"></td>
-      <td><input class="num" type="number" min="0" value="${p.price}" oninput="editDb(${p.id}, 'price', this)"></td>
-      <td><input class="num" type="number" min="0" value="${p.sale}" oninput="editDb(${p.id}, 'sale', this)"></td>
-      <td class="num" id="rate-${p.id}">${rate(p)}</td>
-      <td><input value="${esc(p.memo)}" oninput="editDb(${p.id}, 'memo', this)"></td>
-      <td><button onclick="removeProduct(${p.id})">삭제</button></td>
-    </tr>`).join('') || '<tr><td colspan="8">등록된 제품이 없습니다.</td></tr>';
-}
-function editDb(id, field, el) {
-  const p = db.find(x => x.id === id);
-  p[field] = (field === 'price' || field === 'sale') ? (Number(el.value) || 0) : el.value;
-  document.getElementById('rate-' + id).textContent = rate(p);
+function editItem(id, field, el) {
+  const p = itemById(id);
+  if (field === 'tbd') { p.tbd = el.checked; document.getElementById('item-' + id).className = p.tbd ? 'tbd' : ''; }
+  else if (field === 'price' || field === 'sale') p[field] = Number(el.value) || 0;
+  else p[field] = el.value;
+  document.getElementById('item-disc-' + id).textContent = won(p.price - p.sale);
   saveDb();
+  if (field === 'name') renderSets(); else refreshSetCalc();
 }
-function addProduct() {
-  db.push({ id: nextId(), category: '', name: '', model: '', price: 0, sale: 0, memo: '' });
+function addItem() {
+  db.items.push({ id: nextId(db.items), name: '', category: '', price: 0, sale: 0, tbd: false, memo: '' });
   saveDb(); renderDb();
 }
-function removeProduct(id) {
-  if (!confirm('이 제품을 삭제할까요?')) return;
-  db = db.filter(p => p.id !== id);
-  quote.items = quote.items.filter(i => i.productId !== id);
+function removeItem(id) {
+  const used = db.sets.filter(s => s.comp[id]).length;
+  if (!confirm(used ? `이 단품은 세트 ${used}개의 구성에 들어 있습니다. 삭제하면 구성에서도 빠집니다. 삭제할까요?` : '이 단품을 삭제할까요?')) return;
+  db.items = db.items.filter(p => p.id !== id);
+  db.sets.forEach(s => delete s.comp[id]);
+  quote.lines = quote.lines.filter(l => !(l.kind === 'item' && l.refId === id));
   saveDb(); saveQuote(); renderDb();
 }
+
+// ───────── 데이터베이스: 세트가 ─────────
+function setCalcCells(s) {
+  const c = calcSet(s);
+  return `
+    <td class="num calc">${won(c.list)}</td>
+    <td><input class="num" type="number" min="0" step="1000" value="${s.price}" oninput="editSet(${s.id}, 'price', this)"></td>
+    <td><input class="num" type="number" min="0" step="1000" value="${s.sale ?? ''}" placeholder="없음" oninput="editSet(${s.id}, 'sale', this)"></td>
+    <td class="num calc ${c.setDisc < 0 ? 'bad' : ''}" data-k="setDisc">${won(c.setDisc)}</td>
+    <td class="num calc" data-k="eventDisc">${won(c.eventDisc)}</td>
+    <td class="num calc" data-k="total">${won(c.total)}</td>
+    <td class="num calc" data-k="final"><b>${won(c.final)}</b></td>
+    <td class="num calc" data-k="vat">${won(c.vat)}</td>`;
+}
+function renderSets() {
+  document.getElementById('setBody').innerHTML = db.sets.map((s, i) => `
+    <tr id="set-${s.id}">
+      <td>${i + 1}</td>
+      <td><input value="${esc(s.group)}" style="min-width:80px" oninput="editSet(${s.id}, 'group', this)"></td>
+      <td><input class="name" value="${esc(s.name)}" oninput="editSet(${s.id}, 'name', this)"></td>
+      <td><select style="min-width:90px" onchange="editSet(${s.id}, 'type', this)">
+        ${['유료렌탈', '무상렌탈'].map(t => `<option ${t === s.type ? 'selected' : ''}>${t}</option>`).join('')}
+      </select></td>
+      <td style="min-width:200px">${esc(compText(s))} <button onclick="toggleComp(${s.id})">${openComp === s.id ? '닫기' : '수정'}</button></td>
+      ${setCalcCells(s)}
+      <td><input class="txt" value="${esc(s.cond)}" oninput="editSet(${s.id}, 'cond', this)"></td>
+      <td><input class="txt" value="${esc(s.check)}" oninput="editSet(${s.id}, 'check', this)"></td>
+      <td><input class="txt" value="${esc(s.memo)}" oninput="editSet(${s.id}, 'memo', this)"></td>
+      <td><button onclick="removeSet(${s.id})">삭제</button></td>
+    </tr>
+    ${openComp === s.id ? `
+    <tr><td colspan="17" class="calc">
+      <b>구성 수량</b> <span class="note">(세트에 들어가는 장비 대수 · 0이면 미포함)</span>
+      <div class="comp-edit">
+        ${db.items.map(p => `<label>${esc(p.name || '(이름 없음)')}
+          <input type="number" min="0" value="${s.comp[p.id] || 0}" onchange="editComp(${s.id}, ${p.id}, this)"></label>`).join('')}
+      </div>
+    </td></tr>` : ''}`).join('');
+}
+// 금액 입력 중에는 포커스를 유지하도록 계산 칸만 다시 그림
+function refreshSetCalc() {
+  for (const s of db.sets) {
+    const row = document.getElementById('set-' + s.id);
+    if (!row) continue;
+    const c = calcSet(s);
+    row.children[5].textContent = won(c.list);
+    for (const k of ['setDisc', 'eventDisc', 'total', 'vat']) row.querySelector(`[data-k=${k}]`).textContent = won(c[k]);
+    row.querySelector('[data-k=final]').innerHTML = `<b>${won(c.final)}</b>`;
+    row.querySelector('[data-k=setDisc]').classList.toggle('bad', c.setDisc < 0);
+  }
+}
+function editSet(id, field, el) {
+  const s = db.sets.find(x => x.id === id);
+  if (field === 'price') s.price = Number(el.value) || 0;
+  else if (field === 'sale') s.sale = el.value === '' ? null : Number(el.value) || 0;
+  else s[field] = el.value;
+  saveDb(); refreshSetCalc();
+}
+function toggleComp(id) { openComp = openComp === id ? null : id; renderSets(); }
+function editComp(setId, itemId, el) {
+  const s = db.sets.find(x => x.id === setId);
+  const qty = Math.max(0, Math.floor(Number(el.value)) || 0);
+  if (qty) s.comp[itemId] = qty; else delete s.comp[itemId];
+  saveDb(); renderSets();
+}
+function addSet() {
+  const id = nextId(db.sets);
+  db.sets.push({ id, group: '', name: '', type: '유료렌탈', price: 0, sale: null, cond: '', check: PAID, memo: '', comp: {} });
+  openComp = id;
+  saveDb(); renderSets();
+}
+function removeSet(id) {
+  if (!confirm('이 세트를 삭제할까요?')) return;
+  db.sets = db.sets.filter(s => s.id !== id);
+  quote.lines = quote.lines.filter(l => !(l.kind === 'set' && l.refId === id));
+  saveDb(); saveQuote(); renderSets();
+}
+
+// ───────── 데이터베이스: 내보내기 / 가져오기 / 초기화 ─────────
 function resetDb() {
-  if (!confirm('현재 데이터를 지우고 예시 데이터로 되돌릴까요?')) return;
-  db = structuredClone(SAMPLE); quote.items = [];
+  if (!confirm('수정한 내용을 지우고 기준표 금액으로 되돌릴까요?')) return;
+  db = baseDb(); quote.lines = []; openComp = null;
   saveDb(); saveQuote(); renderDb();
 }
 function exportDb() {
@@ -185,77 +392,120 @@ function importDb(input) {
   const file = input.files[0];
   if (!file) return;
   file.text().then(text => {
-    const rows = JSON.parse(text);
-    if (!Array.isArray(rows)) throw new Error();
-    db = rows.map((r, i) => ({
-      id: i + 1, category: r.category || '', name: r.name || '', model: r.model || '',
-      price: Number(r.price) || 0, sale: Number(r.sale) || 0, memo: r.memo || '',
-    }));
-    quote.items = [];
+    const d = JSON.parse(text);
+    if (!Array.isArray(d.items) || !Array.isArray(d.sets)) throw new Error();
+    db = {
+      items: d.items.map((r, i) => ({
+        id: Number(r.id) || i + 1, name: String(r.name ?? ''), category: String(r.category ?? ''),
+        price: Number(r.price) || 0, sale: Number(r.sale) || 0, tbd: !!r.tbd, memo: String(r.memo ?? ''),
+      })),
+      sets: d.sets.map((r, i) => ({
+        id: Number(r.id) || i + 1, group: String(r.group ?? ''), name: String(r.name ?? ''),
+        type: r.type === '무상렌탈' ? '무상렌탈' : '유료렌탈',
+        price: Number(r.price) || 0, sale: r.sale === null || r.sale === '' || r.sale === undefined ? null : Number(r.sale) || 0,
+        cond: String(r.cond ?? ''), check: String(r.check ?? ''), memo: String(r.memo ?? ''),
+        comp: Object.fromEntries(Object.entries(r.comp || {}).map(([k, v]) => [Number(k), Number(v) || 0]).filter(([k, v]) => k && v > 0)),
+      })),
+    };
+    quote.lines = []; openComp = null;
     saveDb(); saveQuote(); renderDb();
   }).catch(() => alert('파일을 읽을 수 없습니다. 내보내기로 만든 JSON 파일인지 확인해주세요.'));
   input.value = '';
 }
 
 // ───────── 견적서 ─────────
-const FIELDS = { customer: 'qCustomer', phone: 'qPhone', date: 'qDate', months: 'qMonths', staff: 'qStaff' };
+const FIELDS = { customer: 'qCustomer', phone: 'qPhone', date: 'qDate', months: 'qMonths', staff: 'qStaff', special: 'qSpecial', specialMemo: 'qSpecialMemo' };
+const NUM_FIELDS = ['months', 'special'];
 
 function saveQuote() {
   for (const [k, id] of Object.entries(FIELDS)) {
     const el = document.getElementById(id);
-    if (el) quote[k] = k === 'months' ? (Number(el.value) || 0) : el.value;
+    quote[k] = NUM_FIELDS.includes(k) ? Math.max(0, Number(el.value) || 0) : el.value;
   }
   localStorage.setItem(QUOTE_KEY, JSON.stringify(quote));
 }
 function fillQuoteForm() {
   if (!quote.date) quote.date = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD
-  for (const [k, id] of Object.entries(FIELDS)) document.getElementById(id).value = quote[k];
+  for (const [k, id] of Object.entries(FIELDS)) document.getElementById(id).value = quote[k] || (k === 'special' ? '' : quote[k]);
 }
-function addItem() {
-  if (!db.length) return alert('데이터베이스에 제품을 먼저 등록해주세요.');
-  quote.items.push({ productId: db[0].id, qty: 1 });
+function addLine(kind) {
+  const list = kind === 'set' ? db.sets : db.items;
+  if (!list.length) return alert('데이터베이스에 먼저 등록해주세요.');
+  quote.lines.push({ kind, refId: list[0].id, qty: 1 });
   saveQuote(); renderQuote();
 }
-function removeItem(i) { quote.items.splice(i, 1); saveQuote(); renderQuote(); }
-function setItem(i, field, value) {
-  quote.items[i][field] = field === 'qty' ? Math.max(1, Math.floor(Number(value)) || 1) : Number(value);
+function removeLine(i) { quote.lines.splice(i, 1); saveQuote(); renderQuote(); }
+function setLine(i, field, value) {
+  quote.lines[i][field] = field === 'qty' ? Math.max(1, Math.floor(Number(value)) || 1) : Number(value);
   saveQuote(); renderQuote();
 }
 function clearQuote() {
   if (!confirm('견적 내용을 모두 지울까요?')) return;
-  quote = { customer: '', phone: '', date: '', months: 36, staff: '', items: [] };
+  quote = emptyQuote();
   fillQuoteForm(); saveQuote(); renderQuote();
 }
+// 견적 한 줄의 단가 정보
+function linePrice(l) {
+  if (l.kind === 'set') {
+    const s = db.sets.find(x => x.id === l.refId);
+    return s && { ref: s, ...calcSet(s) };
+  }
+  const p = itemById(l.refId);   // 추가 장비: 정상가 → 행사가 (차액은 이벤트 할인)
+  return p && { ref: p, list: p.price, setDisc: 0, eventDisc: p.price - p.sale, final: p.sale };
+}
 function renderQuote() {
-  let list = 0, monthly = 0;
-  const rows = quote.items.map((it, i) => {
-    const p = db.find(x => x.id === it.productId);
-    if (!p) return '';
-    list += p.price * it.qty;
-    monthly += p.sale * it.qty;
-    const options = db.map(x =>
-      `<option value="${x.id}" ${x.id === p.id ? 'selected' : ''}>${esc(x.category ? `[${x.category}] ` : '')}${esc(x.name || '(이름 없음)')}</option>`).join('');
+  let list = 0, setDisc = 0, eventDisc = 0, final = 0;
+  const conds = [];
+  const rows = quote.lines.map((l, i) => {
+    const c = linePrice(l);
+    if (!c) return '';
+    list += c.list * l.qty; setDisc += c.setDisc * l.qty; eventDisc += c.eventDisc * l.qty; final += c.final * l.qty;
+
+    let options;
+    if (l.kind === 'set') {
+      const s = c.ref;
+      options = db.sets.map((x, n) => `<option value="${x.id}" ${x.id === s.id ? 'selected' : ''}>` +
+        esc(`${n + 1}. [${x.group}] ${x.name} · ${x.type} ${won(calcSet(x).final)}${x.cond ? ' · ' + x.cond : ''}`) + '</option>').join('');
+      const notes = [s.cond, s.check].filter(Boolean).join(' / ');
+      if (notes) conds.push(`<li><b>${esc(s.name)}</b> (${esc(s.type)}) — ${esc(notes)}</li>`);
+    } else {
+      options = db.items.map(x => `<option value="${x.id}" ${x.id === c.ref.id ? 'selected' : ''}>` +
+        esc(`[${x.category}] ${x.name || '(이름 없음)'} · ${won(x.sale)}`) + '</option>').join('');
+    }
     return `
       <tr>
         <td>${i + 1}</td>
-        <td><select onchange="setItem(${i}, 'productId', this.value)">${options}</select></td>
-        <td>${esc(p.model)}</td>
-        <td class="num">${won(p.price)}</td>
-        <td class="num">${won(p.sale)}</td>
-        <td><input class="num" type="number" min="1" value="${it.qty}" onchange="setItem(${i}, 'qty', this.value)"></td>
-        <td class="num">${won(p.sale * it.qty)}</td>
-        <td class="no-print"><button onclick="removeItem(${i})">삭제</button></td>
+        <td>${l.kind === 'set' ? '세트' : '추가 장비'}</td>
+        <td>
+          <select onchange="setLine(${i}, 'refId', this.value)">${options}</select>
+          ${l.kind === 'set' ? `<div class="note">구성: ${esc(compText(c.ref))}</div>` : ''}
+        </td>
+        <td class="num">${won(c.list)}</td>
+        <td class="num">${disc(c.setDisc)}</td>
+        <td class="num">${disc(c.eventDisc)}</td>
+        <td class="num">${won(c.final)}</td>
+        <td><input class="num" style="min-width:50px" type="number" min="1" value="${l.qty}" onchange="setLine(${i}, 'qty', this.value)"></td>
+        <td class="num"><b>${won(c.final * l.qty)}</b></td>
+        <td class="no-print" style="white-space:nowrap"><button onclick="removeLine(${i})">삭제</button></td>
       </tr>`;
   }).join('');
   document.getElementById('quoteBody').innerHTML =
-    rows || '<tr><td colspan="8">"+ 품목 추가"를 눌러 제품을 선택하세요.</td></tr>';
+    rows || '<tr><td colspan="10">"+ 세트 추가" 또는 "+ 추가 장비(단품) 추가"를 눌러 상품을 선택하세요.</td></tr>';
 
+  const special = Math.min(Number(quote.special) || 0, final);   // 특별 할인은 최종가 이하로만
+  const monthly = final - special;
+  const vat = Math.round(monthly * 1.1);
   const months = Number(quote.months) || 0;
   document.getElementById('tList').textContent = won(list);
-  document.getElementById('tDiscount').textContent = '-' + won(list - monthly);
-  document.getElementById('tMonthly').textContent = won(monthly);
-  document.getElementById('tTotal').textContent = `${won(monthly * months)} (${months}개월)`;
-  document.getElementById('tTotalDiscount').textContent = '-' + won((list - monthly) * months);
+  document.getElementById('tSet').textContent = disc(setDisc);
+  document.getElementById('tEvent').textContent = disc(eventDisc);
+  document.getElementById('tSpecial').textContent = disc(special);
+  document.getElementById('rowSpecial').classList.toggle('no-print', !special);
+  document.getElementById('tFinal').textContent = won(monthly);
+  document.getElementById('tVat').textContent = won(vat);
+  document.getElementById('tTotal').textContent = `${won(vat * months)} (${months}개월)`;
+  document.getElementById('condList').innerHTML = conds.join('');
+  document.getElementById('condBox').hidden = !conds.length;
 }
 
 fillQuoteForm();
