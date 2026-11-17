@@ -26,14 +26,14 @@ PAGES.price = function renderPricePage() {
 
     <div class="section">
       <div class="row between"><p class="title">세트가</p><button class="btn dark" onclick="addSet()">+ 세트 추가</button></div>
-      <p class="sub" style="margin:8px 0 12px">세트 일반가와 행사가만 확정 금액으로 넣으면 할인은 자동으로 계산됩니다. 세트 할인 = 단품가 합계 − 일반가 · 이벤트 할인 = 일반가 − 행사가 · 무상렌탈은 일반가 0원.</p>
+      <p class="sub" style="margin:8px 0 12px">세트 할인가와 행사가만 넣으면 됩니다(VAT 별도 금액). 행사가가 있으면 행사가, 없으면 세트 할인가에 부가세 10%를 더한 금액이 최종입니다. 무상렌탈은 세트 할인가 0원.</p>
       <div class="row" style="margin-bottom:12px">
         <div class="tabs" id="setTabs"></div>
         <input class="input" style="width:220px" placeholder="세트 이름 검색" value="${esc(priceView.text)}" oninput="priceView.text = this.value; renderSets()">
       </div>
       <div class="table-card">
         <table class="list">
-          <thead><tr><th>No</th><th>상품 구성</th><th>유형</th><th class="num">단품가 합계</th><th class="num">세트 일반가</th><th class="num">행사가</th><th class="num">세트 할인</th><th class="num">이벤트 할인</th><th class="num">최종(VAT 별도)</th><th></th></tr></thead>
+          <thead><tr><th>No</th><th>상품 구성</th><th>유형</th><th class="num">세트 할인가</th><th class="num">행사가</th><th class="num">최종(VAT 포함)</th><th></th></tr></thead>
           <tbody id="setBody"></tbody>
         </table>
       </div>
@@ -77,7 +77,7 @@ function editItem(id, field, el) {
   else p[field] = el.value;
   $('item-disc-' + id).textContent = won(p.price - p.sale);
   saveDb();
-  if (field === 'name') renderSets(); else refreshSetCalc();
+  if (field === 'name') renderSets();
 }
 function addItem() {
   db.items.push({ id: nextId(db.items), name: '', category: '기타', price: 0, sale: 0, tbd: false, memo: '', image: '' });
@@ -93,15 +93,13 @@ function removeItem(id) {
 }
 
 // ───────── 세트가 ─────────
+// 최종 = 행사가(없으면 세트 할인가)에 부가세 10%를 더한 금액
+const setFinalVat = s => won(Math.round(calcSet(s).final * 1.1));
 function setCalcCells(s) {
-  const c = calcSet(s);
   return `
-    <td class="num calc" data-k="list">${won(c.list)}</td>
     <td class="num"><input class="input num" type="number" min="0" step="1000" value="${s.price}" oninput="editSet(${s.id}, 'price', this)"></td>
     <td class="num"><input class="input num" type="number" min="0" step="1000" value="${s.sale ?? ''}" placeholder="없음" oninput="editSet(${s.id}, 'sale', this)"></td>
-    <td class="num calc ${c.setDisc < 0 ? 'bad' : ''}" data-k="setDisc">${won(c.setDisc)}</td>
-    <td class="num calc" data-k="eventDisc">${won(c.eventDisc)}</td>
-    <td class="num" data-k="final"><b>${won(c.final)}</b></td>`;
+    <td class="num" data-k="final"><b>${setFinalVat(s)}</b></td>`;
 }
 function renderSets() {
   const groups = [...new Set(db.sets.map(s => s.group || '기타'))];
@@ -121,7 +119,7 @@ function renderSets() {
       <td class="acts"><button class="btn ${open ? 'dark' : ''}" onclick="priceView.open = ${open ? 'null' : s.id}; renderSets()">${open ? '닫기' : '상세'}</button></td>
     </tr>
     ${open ? `
-    <tr class="detail"><td colspan="10">
+    <tr class="detail"><td colspan="7">
       <div class="detail-grid">
         <label><b class="label">상품 구성(이름)</b> <input class="input" value="${esc(s.name)}" oninput="editSet(${s.id}, 'name', this)" onchange="renderSets()"></label>
         <div class="row" style="align-items:flex-end; flex-wrap:nowrap">
@@ -141,17 +139,13 @@ function renderSets() {
         <div class="row" style="grid-column:1 / -1; justify-content:flex-end"><button class="btn white danger" onclick="removeSet(${s.id})">이 세트 삭제</button></div>
       </div>
     </td></tr>` : ''}`;
-  }).join('') || '<tr><td colspan="10" class="sub" style="padding:24px 8px; text-align:center">조건에 맞는 세트가 없습니다.</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="sub" style="padding:24px 8px; text-align:center">조건에 맞는 세트가 없습니다.</td></tr>';
 }
-// 금액 입력 중에는 포커스를 유지하도록 계산 칸만 다시 그림
+// 금액 입력 중에는 포커스를 유지하도록 최종 칸만 다시 그림
 function refreshSetCalc() {
   for (const s of db.sets) {
-    const row = $('set-' + s.id);
-    if (!row) continue;
-    const c = calcSet(s);
-    for (const k of ['list', 'setDisc', 'eventDisc']) row.querySelector(`[data-k=${k}]`).textContent = won(c[k]);
-    row.querySelector('[data-k=final]').innerHTML = `<b>${won(c.final)}</b>`;
-    row.querySelector('[data-k=setDisc]').classList.toggle('bad', c.setDisc < 0);
+    const cell = $('set-' + s.id)?.querySelector('[data-k=final]');
+    if (cell) cell.innerHTML = `<b>${setFinalVat(s)}</b>`;
   }
 }
 function editSet(id, field, el) {
