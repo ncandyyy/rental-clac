@@ -306,16 +306,16 @@ button:not(:disabled):active { transform: scale(.96); }
 .modal .close:hover { background: var(--line); }
 .url-row a:hover { text-decoration: underline; }
 
-/* 붙여넣기 받을 곳으로 선택된 상태 */
+/* 붙여넣기 받을 곳으로 선택된 상태 (색과 안내 문구로만 표시) */
 .dropzone { cursor: pointer; }
-.dropzone:focus { outline: none; border: 2px solid var(--brand); padding: 11px; background: #fff8f8; }
+.dropzone:focus { outline: none; background: #e9edf1; }
 .dropzone:focus::before, .img-card.picked::before {
-  content: '선택됨 · Ctrl+V로 붙여넣기'; position: absolute; top: -11px; left: 12px; z-index: 1;
-  padding: 3px 8px; border-radius: 4px; background: var(--brand); color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap;
+  content: '사진을 붙여넣으면(Ctrl+V) 추가됩니다'; position: absolute; top: -12px; left: 12px; z-index: 1;
+  padding: 4px 10px; border-radius: 4px; background: var(--text); color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap;
 }
-.img-card { cursor: pointer; border: 2px solid transparent; }
-.img-card.picked, .img-card.picked:hover { border-color: var(--brand); background: #fff8f8; }
-.img-card.picked::before { content: '선택됨 · Ctrl+V'; left: 8px; }
+.img-card { cursor: pointer; }
+.img-card.picked, .img-card.picked:hover { background: #dfe4ea; }
+.img-card.picked::before { content: '붙여넣으면(Ctrl+V) 등록됩니다'; left: 8px; }
 
 /* ── 견적서 양식 (A4 595×842 기준) ── */
 .sheet-pages { display: flex; flex-direction: column; gap: 12px; width: 595px; }
