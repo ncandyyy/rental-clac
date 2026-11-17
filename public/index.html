@@ -4,149 +4,51 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>렌탈 견적 계산기 (직원용)</title>
+<title>견적 관리 사이트</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
-<!-- ───────── 로그인 ───────── -->
-<form id="login" hidden onsubmit="login(event)">
-  <h1>렌탈 견적 계산기 <span class="note">직원용</span></h1>
-  <label>공용 비밀번호 <input id="loginPw" type="password" autocomplete="current-password" autofocus></label>
-  <button>접속</button>
+<!-- 로그인 -->
+<form id="login" class="card" hidden onsubmit="login(event)">
+  <div class="brand" style="padding:0"><img src="/img/ui/logo-mark.svg" alt="" width="47" height="47"><div><b>견적 관리 사이트</b><span>직원용 · 공용 비밀번호로 접속</span></div></div>
+  <input id="loginPw" class="input fill" type="password" placeholder="비밀번호" autocomplete="current-password" autofocus>
+  <button class="btn-big">접속</button>
   <p id="loginMsg" class="err"></p>
 </form>
 
 <div id="app" hidden>
-<h1 class="no-print">렌탈 견적 계산기 <span class="note">직원용 · 모든 금액은 월 렌탈료(VAT 별도)</span></h1>
-<nav>
-  <button id="tab-calc" class="on" onclick="showPage('calc')">계산기 · 견적서</button>
-  <button id="tab-db" onclick="showPage('db')">금액 관리 (단품가·세트가)</button>
-  <button onclick="logout()">로그아웃</button>
-</nav>
+  <aside class="side no-print">
+    <div class="brand"><img src="/img/ui/logo-mark.svg" alt="" width="47" height="47"><div><b>견적 관리 사이트</b><span>월 렌탈료 기준(VAT 포함)</span></div></div>
+    <nav class="nav">
+      <button data-page="quote" onclick="showPage('quote')"><img src="/img/ui/edit.svg" alt="" width="18" height="18">견적서 관리</button>
+      <button data-page="dash" onclick="showPage('dash')"><img src="/img/ui/folder.svg" alt="" width="18" height="18">담당자 대시보드</button>
+      <button data-page="price" onclick="showPage('price')"><img src="/img/ui/dollar-sign.svg" alt="" width="19" height="18">제품 금액 관리</button>
+      <button data-page="images" onclick="showPage('images')"><img src="/img/ui/airplay.svg" alt="" width="18" height="18">이미지 리스트</button>
+      <button class="plain" onclick="logout()">로그아웃</button>
+    </nav>
+  </aside>
 
-<!-- ───────── 계산기 ───────── -->
-<section id="page-calc" class="print-only-sheet">
-  <div class="info" style="margin-top:14px">
-    <label>고객명(상호) <input id="qCustomer" oninput="onInfo()"></label>
-    <label>연락처 <input id="qPhone" oninput="onInfo()"></label>
-    <label>견적일 <input id="qDate" type="date" oninput="onInfo()"></label>
-    <label>약정기간(개월) <input id="qMonths" type="number" min="1" style="width:70px" oninput="onInfo()"></label>
-    <label>담당자 <input id="qStaff" oninput="onInfo()"></label>
-  </div>
-
-  <div class="cols">
-    <div class="left">
-      <h2 style="margin-top:0">STEP 1 · 장비 선택</h2>
-      <div class="bar">
-        <select id="setLoader" onchange="loadSet(this.value); this.value=''" style="max-width:100%"></select>
-        <button onclick="clearQuote()">견적 비우기</button>
-      </div>
-      <div id="pickList"></div>
-    </div>
-
-    <div class="right">
-      <h2 style="margin-top:0">STEP 2 · 견적 내역</h2>
-      <b>적용 세트</b>
-      <div id="setOptions" class="setopts"></div>
-
-      <div class="scroll">
-        <table>
-          <thead><tr><th>구분</th><th>상품</th><th class="num">정상가</th><th class="num">세트 할인</th><th class="num">이벤트 할인</th><th class="num">월 렌탈료</th></tr></thead>
-          <tbody id="resultBody"></tbody>
-        </table>
-      </div>
-
-      <div class="bar">
-        <label>특별 할인(월) <input id="qSpecial" type="number" min="0" step="1000" style="width:90px; text-align:right" oninput="onInfo()"> 원</label>
-        <label>사유 <input id="qSpecialMemo" style="width:180px" placeholder="내부용 · 고객에게 안 보임" oninput="saveQuote()"></label>
-      </div>
-
-      <table class="total">
-        <tr><th>정상가 합계</th><td class="num" id="tList"></td></tr>
-        <tr><th>세트 할인</th><td class="num" id="tSet"></td></tr>
-        <tr><th>이벤트 할인</th><td class="num" id="tEvent"></td></tr>
-        <tr><th>특별 할인</th><td class="num" id="tSpecial"></td></tr>
-        <tr class="big"><th>최종 월 렌탈료 (VAT 별도)</th><td class="num" id="tFinal"></td></tr>
-        <tr class="big"><th>최종 월 렌탈료 (VAT 포함)</th><td class="num" id="tVat"></td></tr>
-        <tr><th>약정기간 총 납부액 (VAT 포함)</th><td class="num" id="tTotal"></td></tr>
-      </table>
-      <ul id="condList" class="note"></ul>
-
-      <div class="bar">
-        <button onclick="copyQuote()">내용 복사하기</button>
-        <button onclick="downloadImage()">견적서 이미지 저장</button>
-        <button onclick="makeLink()">고객용 링크 만들기</button>
-        <button onclick="window.print()">인쇄 / PDF</button>
-      </div>
-      <label><input type="checkbox" id="qShowPrice" onchange="saveQuote()"> 링크 미리보기(카톡·톡톡)에 금액 표시</label>
-      <p id="actionMsg" class="note"></p>
-      <div id="linkOut" class="bar" hidden>
-        <input id="linkUrl" readonly style="flex:1; min-width:200px" onclick="this.select()">
-        <a id="linkOpen" target="_blank" rel="noopener">열어보기</a>
-      </div>
-    </div>
-  </div>
-
-  <h2 class="no-print">견적서 미리보기 <span class="note">이미지 저장 · 고객용 링크에 이 양식 그대로 나갑니다</span></h2>
-  <div class="scroll keep"><div id="sheet"></div></div>
-</section>
-
-<!-- ───────── 금액 관리 ───────── -->
-<section id="page-db" class="no-print" hidden>
-  <p class="note">
-    칸을 수정하면 바로 저장되고, 모든 직원의 계산기에 반영됩니다.<br>
-    회색 칸 = 자동 계산 · <span class="tbd">노란 줄</span> = 임시값(확정 필요) ·
-    <span class="bad">붉은 칸</span> = 세트 일반가가 단품 합계보다 비싼 경우
-  </p>
-  <div class="bar">
-    <button onclick="exportDb()">내보내기 (JSON)</button>
-    <button onclick="document.getElementById('importFile').click()">가져오기 (JSON)</button>
-    <input type="file" id="importFile" accept=".json" hidden onchange="importDb(this)">
-    <button onclick="resetDb()">기준표(26.11.11)로 초기화</button>
-    <span id="saveState" class="note"></span>
-  </div>
-
-  <h2>① 단품가 <span class="note">장비별 정상가 / 행사가 — 세트의 정상가 합계와 추가 장비 계산에 사용</span></h2>
-  <div class="bar"><button onclick="addItem()">+ 단품 추가</button></div>
-  <div class="scroll">
-    <table>
-      <thead><tr>
-        <th>품목</th><th>분류</th>
-        <th class="num">단품 정상가</th><th class="num">단품 행사가</th><th class="num">행사 할인</th>
-        <th>확정 필요</th><th>비고</th><th></th>
-      </tr></thead>
-      <tbody id="itemBody"></tbody>
-    </table>
-  </div>
-
-  <h2>② 세트가 <span class="note">세트 일반가·행사가는 확정 금액으로 입력 — 할인액은 역산해서 자동 표시</span></h2>
-  <p class="note">
-    세트 할인 = 단품가 합계 − 세트 일반가 · 이벤트 할인 = 세트 일반가 − 행사가 ·
-    최종 = 행사가(비어 있으면 일반가) · 무상렌탈은 일반가 0원
-  </p>
-  <div class="bar"><button onclick="addSet()">+ 세트 추가</button></div>
-  <div class="scroll">
-    <table>
-      <thead><tr>
-        <th>No</th><th>구분</th><th>상품 구성</th><th>유형</th><th>구성 장비</th>
-        <th class="num">단품가 합계<br>(정상가)</th>
-        <th class="num">세트 일반가</th><th class="num">행사가</th>
-        <th class="num">세트 할인</th><th class="num">이벤트 할인</th><th class="num">총 할인</th>
-        <th class="num">최종 월렌탈료</th><th class="num">VAT 포함</th>
-        <th>매출·특별조건</th><th>직원 확인</th><th>비고</th><th></th>
-      </tr></thead>
-      <tbody id="setBody"></tbody>
-    </table>
-  </div>
-</section>
+  <main class="main">
+    <section id="page-quote" hidden></section>
+    <section id="page-dash" hidden></section>
+    <section id="page-price" hidden></section>
+    <section id="page-images" hidden></section>
+  </main>
 </div>
 
-<div class="offscreen" id="ogBox"></div>
+<div id="modalRoot"></div>
+<div id="toast" class="toast" hidden></div>
+<input type="file" id="filePick" accept="image/png,image/jpeg,image/webp" hidden>
 
 <script src="/vendor/html-to-image.js"></script>
 <script src="/data.js"></script>
 <script src="/sheet.js"></script>
-<script src="/app.js"></script>
+<script src="/js/core.js"></script>
+<script src="/js/quote.js"></script>
+<script src="/js/dash.js"></script>
+<script src="/js/price.js"></script>
+<script src="/js/images.js"></script>
+<script>boot();</script>
 </body>
 </html>
