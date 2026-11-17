@@ -306,10 +306,6 @@ button:not(:disabled):active { transform: scale(.96); }
 .modal .close:hover { background: var(--line); }
 .url-row a:hover { text-decoration: underline; }
 
-.suggest { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; width: 100%; padding: 10px 12px; border-radius: 6px; background: var(--bg); color: var(--text2); line-height: 1.5; }
-.suggest:hover { background: var(--fill); }
-.suggest .add { color: var(--brand); font-weight: 600; font-size: 13px; }
-
 /* 붙여넣기 받을 곳으로 선택된 상태 */
 .dropzone { cursor: pointer; }
 .dropzone:focus { outline: none; border: 2px solid var(--brand); padding: 11px; background: #fff8f8; }

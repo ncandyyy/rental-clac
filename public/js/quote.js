@@ -9,7 +9,6 @@ const emptyQuote = () => ({
 });
 let quote = (() => { try { return { ...emptyQuote(), ...JSON.parse(localStorage.getItem(QUOTE_KEY)) }; } catch { return emptyQuote(); } })();
 const FOLD_KEY = 'rental-folds-v2';
-let showAllSuggest = false;   // 추천 세트 전체 보기
 const folds = { simple: false, detail: false, photos: false, notes: true, ...JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') };   // 접힌 영역
 
 function saveQuote() { localStorage.setItem(QUOTE_KEY, JSON.stringify(quote)); }
@@ -21,16 +20,6 @@ function candidates() {
   const fits = db.sets.filter(s => units(s) > 0 && Object.entries(s.comp).every(([id, n]) => (quote.qty[id] || 0) >= n));
   const most = Math.max(0, ...fits.map(units));
   return fits.filter(s => units(s) === most);
-}
-// 추천 세트: 지금 고른 장비가 전부 들어가면서 장비가 더 필요한 세트. 덜 추가해도 되는 순.
-function suggestions() {
-  const picked = Object.entries(quote.qty);
-  if (!picked.length) return [];
-  return db.sets
-    .filter(s => picked.every(([id, n]) => (s.comp[id] || 0) >= n))
-    .map(s => ({ set: s, missing: Object.entries(s.comp).map(([id, n]) => ({ item: itemById(id), n: n - (quote.qty[id] || 0) })).filter(m => m.n > 0 && m.item) }))
-    .filter(x => x.missing.length)
-    .sort((a, b) => a.missing.reduce((t, m) => t + m.n, 0) - b.missing.reduce((t, m) => t + m.n, 0));
 }
 // 자동 선택: 가장 많이 덮는 세트 중 조건 없는 유료렌탈 우선 (무상·매출조건 세트는 직원이 직접 선택)
 function autoSet(cands) {
@@ -303,9 +292,7 @@ function renderResult() {
 
   const opt = (value, checked, label) =>
     `<label class="${checked ? 'sel' : ''}"><input type="radio" name="setChoice" ${checked ? 'checked' : ''} onchange="chooseSet('${value}')"><span>${label}</span></label>`;
-  const sugg = suggestions();
-  const MAX_SUGGEST = 6;
-  $('setPick').innerHTML = (!cands.length ? '' : `
+  $('setPick').innerHTML = !cands.length ? '' : `
     <div class="setpick">
       <span><b class="label">적용 세트 :</b> <span class="sub">같은 구성에 세트가 여러 개면 직접 고를 수 있습니다.</span></span>
       ${cands.map(s => opt(s.id, set === s,
@@ -313,16 +300,7 @@ function renderResult() {
         (s === auto ? ' <span class="badge">자동 적용</span>' : '') +
         (s.cond ? ` <span class="badge red">${esc(s.cond)}</span>` : ''))).join('')}
       ${opt('none', !set, `세트 미적용 (단품 합계) · 월 ${won(compute(null).final)}`)}
-    </div>`) + (!sugg.length ? '' : `
-    <div class="setpick" style="margin-top:${cands.length ? 8 : 0}px">
-      <span><b class="label">추천 세트 :</b> <span class="sub">고른 장비가 들어가는 세트입니다. 누르면 부족한 장비가 함께 담깁니다.</span></span>
-      ${sugg.slice(0, showAllSuggest ? sugg.length : MAX_SUGGEST).map(({ set: s, missing }) => `
-        <button class="suggest" onclick="loadSet(${s.id})">
-          <span><b>${esc(s.name)}</b> · ${s.type} · 월 ${won(Math.round(calcSet(s).final * 1.1))}${s.cond ? ` <span class="badge red">${esc(s.cond)}</span>` : ''}</span>
-          <span class="add">＋ ${missing.map(m => esc(m.item.name) + (m.n > 1 ? ' ×' + m.n : '')).join(', ')}</span>
-        </button>`).join('')}
-      ${sugg.length > MAX_SUGGEST ? `<button class="btn" style="align-self:flex-start" onclick="showAllSuggest = !showAllSuggest; renderResult()">${showAllSuggest ? '접기' : `추천 세트 ${sugg.length - MAX_SUGGEST}개 더 보기`}</button>` : ''}
-    </div>`);
+    </div>`;
 
   $('lineBody').innerHTML = r.lines.map(l => `
     <tr>
