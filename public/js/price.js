@@ -43,11 +43,11 @@ PAGES.price = function renderPricePage() {
       <p class="title">기본 문구</p>
       <p class="sub" style="margin:8px 0 12px">견적을 새로 만들 때 기본으로 들어가는 내용입니다. 견적마다 따로 고칠 수도 있습니다.</p>
       <div class="card" style="display:grid; grid-template-columns:1fr 1fr; gap:16px 24px">
-        <label>참고사항 <span class="sub">(한 줄에 한 항목)</span>
+        <label><b class="label">참고사항 :</b> <span class="sub">한 줄에 한 항목</span>
           <textarea style="margin-top:8px" oninput="editSetting('notes', this.value)">${esc(db.settings.notes.join('\n'))}</textarea></label>
-        <label>담당자 목록 <span class="sub">(한 줄에 한 명 · 견적 담당자 칸 자동완성)</span>
+        <label><b class="label">담당자 목록 :</b> <span class="sub">한 줄에 한 명 · 견적 담당자 칸 자동완성</span>
           <textarea style="margin-top:8px" placeholder="예) 김다은" oninput="editSetting('staff', this.value)">${esc((db.settings.staff || []).join('\n'))}</textarea></label>
-        <label style="grid-column:1 / -1">문자 내용 <span class="sub">— {고객명} {상품구성} {월렌탈료} {담당자} {링크} 자리에 견적 내용이 자동으로 들어갑니다.</span>
+        <label style="grid-column:1 / -1"><b class="label">문자 내용 :</b> <span class="sub">{고객명} {상품구성} {월렌탈료} {담당자} {링크} 자리에 견적 내용이 자동으로 들어갑니다.</span>
           <textarea style="margin-top:8px; min-height:280px" oninput="editSetting('message', this.value)">${esc(db.settings.message)}</textarea></label>
       </div>
     </div>`;
@@ -123,17 +123,17 @@ function renderSets() {
     ${open ? `
     <tr class="detail"><td colspan="10">
       <div class="detail-grid">
-        <label>상품 구성(이름) <input class="input" value="${esc(s.name)}" oninput="editSet(${s.id}, 'name', this)" onchange="renderSets()"></label>
+        <label><b class="label">상품 구성(이름)</b> <input class="input" value="${esc(s.name)}" oninput="editSet(${s.id}, 'name', this)" onchange="renderSets()"></label>
         <div class="row" style="align-items:flex-end; flex-wrap:nowrap">
-          <label class="grow">구분 <input class="input" value="${esc(s.group)}" oninput="editSet(${s.id}, 'group', this)" onchange="renderSets()"></label>
-          <label>유형 <select class="input" style="width:110px" onchange="editSet(${s.id}, 'type', this); renderSets()">
+          <label class="grow"><b class="label">구분</b> <input class="input" value="${esc(s.group)}" oninput="editSet(${s.id}, 'group', this)" onchange="renderSets()"></label>
+          <label><b class="label">유형</b> <select class="input" style="width:110px" onchange="editSet(${s.id}, 'type', this); renderSets()">
             ${['유료렌탈', '무상렌탈'].map(t => `<option ${t === s.type ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         </div>
-        <label>매출·특별조건 <input class="input" value="${esc(s.cond)}" oninput="editSet(${s.id}, 'cond', this)" onchange="renderSets()"></label>
-        <label>직원 확인 <input class="input" value="${esc(s.check)}" oninput="editSet(${s.id}, 'check', this)"></label>
-        <label style="grid-column:1 / -1">비고 <input class="input" value="${esc(s.memo)}" oninput="editSet(${s.id}, 'memo', this)"></label>
+        <label><b class="label">매출·특별조건</b> <input class="input" value="${esc(s.cond)}" oninput="editSet(${s.id}, 'cond', this)" onchange="renderSets()"></label>
+        <label><b class="label">직원 확인</b> <input class="input" value="${esc(s.check)}" oninput="editSet(${s.id}, 'check', this)"></label>
+        <label style="grid-column:1 / -1"><b class="label">비고</b> <input class="input" value="${esc(s.memo)}" oninput="editSet(${s.id}, 'memo', this)"></label>
         <div class="comp-edit">
-          <span class="sub" style="width:100%">구성 장비 — 세트에 들어가는 대수 (＋/－로 조정)</span>
+          <span style="width:100%"><b class="label">구성 장비 :</b> <span class="sub">세트에 들어가는 대수 (＋/－로 조정)</span></span>
           ${db.items.map(p => { const n = s.comp[p.id] || 0; return `
             <span class="chip ${n ? 'on' : ''}"><b>${esc(p.name || '(이름 없음)')}</b>
               <button onclick="editComp(${s.id}, ${p.id}, -1)" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button onclick="editComp(${s.id}, ${p.id}, 1)">+</button></span>`; }).join('')}

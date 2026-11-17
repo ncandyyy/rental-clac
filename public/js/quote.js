@@ -39,7 +39,7 @@ function compute(set) {
     const c = calcSet(set);
     lines.push({ kind: 'set', name: set.name, qty: 1, unit: c.list, list: c.list, setDisc: c.setDisc, eventDisc: c.eventDisc, final: c.final });
     const note = [set.cond, set.check].filter(Boolean).join(' / ');
-    if (note) conds.push(`${set.name} (${set.type}) — ${note}`);
+    if (note) conds.push(`${set.name} (${set.type}) : ${note}`);
     if (set.image) addImage(set.image, set.name);
     else for (const id of Object.keys(set.comp)) { const p = itemById(id); if (p) addImage(p.image, p.name); }
   }
@@ -294,7 +294,7 @@ function renderResult() {
     `<label class="${checked ? 'sel' : ''}"><input type="radio" name="setChoice" ${checked ? 'checked' : ''} onchange="chooseSet('${value}')"><span>${label}</span></label>`;
   $('setPick').innerHTML = !cands.length ? '' : `
     <div class="setpick">
-      <span class="sub">적용 세트 — 같은 구성에 세트가 여러 개면 직접 고를 수 있습니다.</span>
+      <span><b class="label">적용 세트 :</b> <span class="sub">같은 구성에 세트가 여러 개면 직접 고를 수 있습니다.</span></span>
       ${cands.map(s => opt(s.id, set === s,
         `<b>${esc(s.name)}</b> · ${s.type} · 월 ${won(compute(s).final)}` +
         (s === auto ? ' <span class="badge">자동 추천</span>' : '') +
