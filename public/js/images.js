@@ -4,6 +4,21 @@
 let hoverCard = null;   // 마우스가 올라가 있는 카드 { kind, id }
 let pickedCard = null;  // 클릭해서 선택한 카드 - 붙여넣기(Ctrl+V)를 받는다
 
+// 구성이 같은 세트(무상·유상·매출조건 등)는 사진을 같이 쓴다
+const compKey = s => Object.entries(s.comp).map(([id, n]) => `${id}x${n}`).sort().join(',');
+const sameCompSets = s => db.sets.filter(x => compKey(x) === compKey(s));
+// 이미지 리스트에 보여줄 세트 카드: 같은 구성끼리 하나로 묶는다
+function setGroups() {
+  const groups = new Map();
+  for (const s of db.sets) {
+    const g = groups.get(compKey(s)) || { id: s.id, name: s.name, image: '', types: new Set() };
+    g.image = g.image || s.image;
+    g.types.add(s.type === '무상렌탈' ? '무상' : '유상');
+    groups.set(compKey(s), g);
+  }
+  return [...groups.values()];
+}
+
 PAGES.images = function renderImagesPage() {
   hoverCard = null;
   const picked = (kind, x) => pickedCard && pickedCard.kind === kind && pickedCard.id === x.id;
@@ -28,15 +43,17 @@ PAGES.images = function renderImagesPage() {
     <div class="img-grid" style="margin-top:12px">${db.items.map(p => card('item', p, p.name || '(이름 없음)', '사진 없음')).join('')}</div>
     <div class="section">
       <p class="title">세트 상품</p>
-      <p class="sub" style="margin:8px 0 12px">세트 사진을 등록하면 견적서에 세트 사진 한 장이 들어가고, 없으면 구성품 사진이 각각 들어갑니다.</p>
-      <div class="img-grid">${db.sets.map((s, i) => card('set', s, `${i + 1}. ${s.name}${s.type === '무상렌탈' ? ' (무상)' : ''}`, '구성품 사진<br>자동 사용')).join('')}</div>
+      <p class="sub" style="margin:8px 0 12px; line-height:1.6">세트 사진을 등록하면 견적서에 세트 사진 한 장이 들어가고, 없으면 구성품 사진이 각각 들어갑니다.<br>
+      구성이 같은 세트(무상·유상)는 한 칸으로 묶여 있고, 등록한 사진이 함께 적용됩니다.</p>
+      <div class="img-grid">${setGroups().map(g => card('set', g, `${g.name}${g.types.size > 1 ? ' (무상·유상 공통)' : g.types.has('무상') ? ' (무상)' : ''}`, '구성품 사진<br>자동 사용')).join('')}</div>
     </div>`;
 };
 
 function setImage(kind, id, url) {
   const x = (kind === 'item' ? db.items : db.sets).find(v => v.id === id);
   if (!x) return;
-  x.image = url;
+  if (kind === 'item') x.image = url;
+  else for (const s of sameCompSets(x)) s.image = url;   // 같은 구성의 세트 전부에 적용
   const top = scrollY;
   saveDb(); PAGES.images(); scrollTo(0, top);
 }
