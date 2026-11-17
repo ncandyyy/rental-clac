@@ -1,21 +1,28 @@
 // 견적서 관리(메인): 장비 선택 → 견적 내역 → 저장 → 완료 모달
 
+const emptyRecipient = () => ({ customer: '', name: '', phone: '' });   // 상호 / 고객 성함 / 연락처
 const emptyQuote = () => ({
-  customer: '', phone: '', date: today(), months: 36, staff: '', special: 0, specialMemo: '',
+  recipients: [emptyRecipient()],   // 수신자가 여러 명이면 저장할 때 수신자마다 견적서를 따로 만들고 한 묶음으로 둔다
+  date: today(), months: 36, staff: '', special: 0, specialMemo: '',
   qty: {}, setChoice: 'auto',
+  manual: [],                     // 직접 작성한 줄 { key, label, name, unit, qty, uom, amount }
+  order: [],                      // 견적 내역 줄 순서 (줄 key 목록)
   notes: null,                    // null이면 기본 참고사항 사용
   imgRemoved: [], imgExtra: [],   // 자동으로 불러온 사진 중 뺀 것 / 직접 올린 것
   editingId: null,                // 저장된(또는 임시저장한) 견적을 이어서 쓰는 중이면 그 id
   editingStatus: null,            // 그 견적의 상태: draft / done / sent
+  groupId: null,                  // 여러 수신자로 함께 만든 견적 묶음
 });
 // 작성 중인 견적은 이 브라우저에 남기지 않는다. 새로고침하면 빈 화면이고, 이어서 쓰려면 임시저장한다.
 let quote = emptyQuote();
 const FOLD_KEY = 'rental-folds-v2';
-const folds = { simple: false, detail: false, photos: false, notes: true, ...JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') };   // 접힌 영역
+const folds = { photos: false, notes: true, ...JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') };   // 접힌 영역
 
+const EDIT_WARNING = "기본 세트·상품 항목을 직접 수정하면 금액표 기준 금액(세트·이벤트 할인)과 달라질 수 있습니다.\n금액만 조정하려면 아래 '특별 할인' 항목을 활용해 주세요.\n\n그래도 이 항목을 직접 수정할까요?";
 
 // ───────── 계산 ─────────
 const units = s => Object.values(s.comp).reduce((a, b) => a + b, 0);
+const maxOf = p => p?.max > 0 ? p.max : Infinity;
 // 고른 장비 안에 구성이 전부 들어가는 세트 중, 가장 많이 덮는 것들만 (더 작은 세트는 보여주지 않는다)
 function candidates() {
   const fits = db.sets.filter(s => units(s) > 0 && Object.entries(s.comp).every(([id, n]) => (quote.qty[id] || 0) >= n));
@@ -32,25 +39,40 @@ function currentSet(cands) {
   if (quote.setChoice === 'none') return null;
   return cands.find(s => s.id === quote.setChoice) || autoSet(cands);
 }
-// set(없으면 null)을 적용했을 때의 견적. 세트에 안 들어간 장비는 추가 장비(단품 행사가).
+// 고른 장비로 그 세트를 몇 벌 만들 수 있는지
+const setCount = set => set ? Math.min(...Object.entries(set.comp).map(([id, n]) => Math.floor((quote.qty[id] || 0) / n))) : 0;
+
+// set(없으면 null)을 적용했을 때의 견적. 세트에 안 들어간 장비는 추가 장비(단품 행사가), 직접 작성한 줄은 적은 금액 그대로.
 function compute(set) {
   const lines = [], conds = [], autoImages = [];
   const addImage = (url, name) => { if (url && !autoImages.some(i => i.url === url)) autoImages.push({ url, name }); };
-  if (set) {
+  const k = setCount(set);
+  if (set && k) {
     const c = calcSet(set);
-    lines.push({ kind: 'set', name: set.name, qty: 1, unit: c.list, list: c.list, setDisc: c.setDisc, eventDisc: c.eventDisc, final: c.final });
+    lines.push({ key: 'set', kind: 'set', label: '세트 상품', name: set.name, qty: k, unit: c.list, uom: '세트',
+      list: c.list * k, setDisc: c.setDisc * k, eventDisc: c.eventDisc * k, final: c.final * k });
     const note = [set.cond, set.check].filter(Boolean).join(' / ');
     if (note) conds.push(`${set.name} (${set.type}) : ${note}`);
     if (set.image) addImage(set.image, set.name);
     else for (const id of Object.keys(set.comp)) { const p = itemById(id); if (p) addImage(p.image, p.name); }
   }
   for (const p of db.items) {
-    const n = (quote.qty[p.id] || 0) - (set?.comp[p.id] || 0);
+    const n = (quote.qty[p.id] || 0) - (set && k ? set.comp[p.id] || 0 : 0) * k;
     if (n <= 0) continue;
-    lines.push({ kind: 'item', name: p.name, qty: n, unit: p.price, list: p.price * n, setDisc: 0, eventDisc: (p.price - p.sale) * n, final: p.sale * n });
+    lines.push({ key: 'item:' + p.id, kind: 'item', itemId: p.id, label: p.category === '포스 프로그램' ? '포스 프로그램' : '추가 장비',
+      name: p.name, qty: n, unit: p.price, uom: p.unit || '대', list: p.price * n, setDisc: 0, eventDisc: (p.price - p.sale) * n, final: p.sale * n });
     addImage(p.image, p.name);
   }
-  const sum = k => lines.reduce((a, l) => a + l[k], 0);
+  for (const m of quote.manual) {
+    const amount = Number(m.amount) || 0;
+    lines.push({ key: m.key, kind: 'manual', label: m.label, name: m.name, qty: Number(m.qty) || 0, unit: Number(m.unit) || 0, uom: m.uom,
+      list: amount, setDisc: 0, eventDisc: 0, final: amount });
+  }
+  // 직원이 정한 순서대로 (처음 나온 줄은 원래 순서대로 뒤에 붙는다)
+  const pos = key => { const i = quote.order.indexOf(key); return i < 0 ? Infinity : i; };
+  lines.sort((a, b) => pos(a.key) - pos(b.key));
+
+  const sum = key => lines.reduce((a, l) => a + l[key], 0);
   const subtotal = sum('final');
   const special = Math.min(Number(quote.special) || 0, subtotal);   // 특별 할인은 합계 이하로만
   const supply = subtotal - special;                                  // 총 합계 (VAT 별도)
@@ -61,11 +83,16 @@ function compute(set) {
 }
 const quoteNotes = () => quote.notes || db.settings.notes;
 const quoteImages = r => [...r.autoImages.filter(i => !quote.imgRemoved.includes(i.url)), ...quote.imgExtra];
+const current = () => compute(currentSet(candidates()));
 
 // 견적서·고객 링크에 들어가는 내용 (사유 메모 같은 내부 정보는 넣지 않는다)
-function snapshot() {
-  const { autoImages, ...r } = compute(currentSet(candidates()));
-  return { customer: quote.customer.trim(), phone: quote.phone.trim(), date: quote.date, staff: quote.staff.trim() || COMPANY.name, ...r, notes: quoteNotes(), images: quoteImages({ autoImages }) };
+function snapshot(rcp = quote.recipients[0]) {
+  const { autoImages, ...r } = current();
+  r.lines = r.lines.map(({ key, itemId, ...l }) => l);
+  return {
+    customer: rcp.customer.trim(), name: rcp.name.trim(), phone: rcp.phone.trim(), date: quote.date, staff: quote.staff.trim() || COMPANY.name,
+    ...r, notes: quoteNotes(), images: quoteImages({ autoImages }),
+  };
 }
 
 // ───────── 화면 ─────────
@@ -90,28 +117,16 @@ PAGES.quote = function renderQuotePage() {
         <label class="field">견적 담당자 <input id="qStaff" list="staffList" placeholder="미입력시 페이앤밴" value="${esc(quote.staff)}" oninput="setInfo('staff', this.value)"></label>
         <datalist id="staffList">${(db.settings.staff || []).map(s => `<option value="${esc(s)}">`).join('')}</datalist>
       </div>
-      <div class="line right">
-        <div class="group" style="gap:13px">
-          <label class="field">고객명(상호) <input id="qCustomer" placeholder="입력" value="${esc(quote.customer)}" oninput="setInfo('customer', this.value)"></label>
-          <label class="field">연락처 <input id="qPhone" placeholder="입력" value="${esc(quote.phone)}" oninput="setInfo('phone', this.value)"></label>
-        </div>
-      </div>
+      <div class="recips" id="recipList"></div>
     </div>
 
     <div class="cols">
       <div class="col-left">
-        <div class="row between">
+        <div>
           <p class="title">장비 선택</p>
-          <select class="input" style="width:250px" onchange="loadSet(this.value); this.value=''" id="setLoader"></select>
+          <p class="sub" style="margin-top:6px">장비를 누르면 견적 내역에 담깁니다. 수량은 오른쪽 견적 내역에서 바꿀 수 있습니다.</p>
         </div>
-        <div class="fold" id="foldSimple">
-          <button class="fold-head" onclick="toggleFold('simple')">세트 구성 간단 작성 <img src="/img/ui/chevron-down.svg" alt="" width="14" height="14"></button>
-          <div class="fold-body" id="chipList"></div>
-        </div>
-        <div class="fold" id="foldDetail">
-          <button class="fold-head" onclick="toggleFold('detail')">세트 구성 상세 작성 <img src="/img/ui/chevron-down.svg" alt="" width="14" height="14"></button>
-          <div class="fold-body" id="pickList"></div>
-        </div>
+        <div class="chip-list" id="chipList"></div>
       </div>
 
       <div class="col-right">
@@ -119,9 +134,11 @@ PAGES.quote = function renderQuotePage() {
         <div id="setPick"></div>
         <div>
           <table class="qtable">
-            <thead><tr><th style="width:110px">항목</th><th>설명</th><th style="width:80px">단가</th><th style="width:60px">수량</th><th style="width:60px">단위</th><th style="width:110px">금액</th></tr></thead>
+            <thead><tr><th class="mv"></th><th style="width:96px">항목</th><th>설명</th><th class="num" style="width:96px">단가</th><th style="width:118px">수량</th><th style="width:58px">단위</th><th class="num" style="width:104px">금액</th><th class="ac"></th></tr></thead>
             <tbody id="lineBody"></tbody>
           </table>
+          <div class="row" style="padding:10px 0"><button class="btn" onclick="addManual()">+ 항목 직접 추가</button>
+            <span class="sub">항목·설명·단가·수량·단위·금액을 직접 적을 수 있습니다. ↑↓로 순서를 바꿉니다.</span></div>
           <div class="sum dashed"><div><span>총</span><span id="tList"></span></div></div>
           <div class="sum">
             <div><span>세트 할인</span><span id="tSet"></span></div>
@@ -181,114 +198,74 @@ PAGES.quote = function renderQuotePage() {
       </div>
     </div>`;
   $('qNotes').value = quoteNotes().join('\n');
+  renderRecipients();
   renderPicks();
 };
 
-function setInfo(field, value) { quote[field] = value; renderResult(); }
+function setInfo(field, value) { quote[field] = value; renderTotals(); }
 function toggleFold(name) { folds[name] = !folds[name]; localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); applyFolds(); }
 function applyFolds() {
-  $('foldSimple').classList.toggle('closed', folds.simple);
-  $('foldDetail').classList.toggle('closed', folds.detail);
   $('foldPhotos').classList.toggle('closed', folds.photos);
   $('foldNotes').classList.toggle('closed', folds.notes);
 }
 
-function step(id, delta) {
-  const n = Math.max(0, (quote.qty[id] || 0) + delta);
-  if (n) quote.qty[id] = n; else delete quote.qty[id];
-  renderPicks();
+// ───────── 수신자 (상호 / 고객 성함 / 연락처, + 로 추가) ─────────
+function renderRecipients() {
+  const many = quote.recipients.length > 1;
+  $('recipList').innerHTML = quote.recipients.map((r, i) => `
+    <div class="recip">
+      ${many ? `<span class="badge">수신자 ${i + 1}</span>` : ''}
+      <label class="field">상호 <input placeholder="입력" value="${esc(r.customer)}" oninput="setRecipient(${i}, 'customer', this.value)"></label>
+      <label class="field">고객 성함 <input placeholder="입력" value="${esc(r.name)}" oninput="setRecipient(${i}, 'name', this.value)"></label>
+      <label class="field">연락처 <input placeholder="입력" value="${esc(r.phone)}" oninput="setRecipient(${i}, 'phone', this.value)"></label>
+      ${i === 0
+        ? '<button class="btn icon" onclick="addRecipient()" title="수신자 추가" aria-label="수신자 추가">＋</button>'
+        : `<button class="btn icon" onclick="removeRecipient(${i})" title="이 수신자 빼기" aria-label="수신자 빼기">✕</button>`}
+    </div>`).join('') + (many ? '<p class="sub recip-note">저장하면 수신자마다 견적서가 따로 만들어지고 한 묶음으로 저장됩니다. 저장 뒤에는 대시보드에서 하나씩 수정할 수 있습니다.</p>' : '');
 }
-function toggleItem(id) { step(id, quote.qty[id] ? -quote.qty[id] : 1); }
+function setRecipient(i, field, value) { quote.recipients[i][field] = value; }
+function addRecipient() {
+  if (quote.recipients.length >= 10) return toast('수신자는 한 번에 10명까지 넣을 수 있습니다.', true);
+  quote.recipients.push(emptyRecipient()); renderRecipients();
+}
+function removeRecipient(i) { quote.recipients.splice(i, 1); renderRecipients(); }
+
+// ───────── 장비 선택 (칩) ─────────
+function setQty(id, n) {
+  const p = itemById(id);
+  n = Math.max(0, Math.min(maxOf(p), Math.floor(Number(n)) || 0));
+  if (Number.isFinite(maxOf(p)) && n === maxOf(p) && (quote.qty[id] || 0) < n) toast(`${p.name}은(는) 최대 ${p.max}${p.unit || '대'}까지 넣을 수 있습니다.`);
+  if (n) quote.qty[id] = n; else delete quote.qty[id];
+}
+function toggleItem(id) { setQty(id, quote.qty[id] ? 0 : 1); renderPicks(); }
 function chooseSet(value) {
   quote.setChoice = value === 'auto' || value === 'none' ? value : Number(value);
   renderResult();
 }
-// 세트 구성을 그대로 담기
-function loadSet(id) {
-  const s = db.sets.find(x => x.id === Number(id));
-  if (!s) return;
-  quote.qty = { ...s.comp }; quote.setChoice = s.id;
-  renderPicks();
-}
 function newQuote() {
-  if (Object.keys(quote.qty).length && !confirm('작성 중인 내용을 지우고 새 견적을 시작할까요?')) return;
+  const hasContent = Object.keys(quote.qty).length || quote.manual.length || quote.recipients.some(r => r.customer || r.name || r.phone);
+  if (hasContent && !confirm('작성 중인 내용을 지우고 새 견적을 시작할까요?')) return;
   quote = emptyQuote();
   PAGES.quote();
 }
-function applySpecial() {
-  quote.special = Math.max(0, Number($('qSpecial').value) || 0);
-  quote.specialMemo = $('qSpecialMemo').value;
-  renderResult();
-  toast(quote.special ? `특별 할인 ${won(quote.special)}을 적용했습니다.` : '특별 할인을 해제했습니다.');
-}
-function applyNotes() {
-  quote.notes = $('qNotes').value.split('\n').map(s => s.trim()).filter(Boolean);
-  renderResult();
-  toast('참고사항을 이 견적에 적용했습니다.');
-}
-function resetNotes() {
-  quote.notes = null; $('qNotes').value = quoteNotes().join('\n');
-  renderResult();
-}
-async function addQuoteImage() {
-  const file = await pickFile();
-  if (file) addQuoteFiles([file]);
-}
-// 파일 선택 · 끌어다 놓기 · 붙여넣기로 들어온 사진을 이 견적에 추가
-async function addQuoteFiles(files) {
-  if (!files.length) return toast('이미지 파일(PNG·JPG·WEBP)만 넣을 수 있습니다.', true);
-  try {
-    toast('이미지 올리는 중…');
-    for (const file of files) {
-      const name = /^image\.\w+$/.test(file.name) ? '제품 이미지' : file.name.replace(/\.[^.]+$/, '');   // 붙여넣은 이미지는 이름이 없다
-      quote.imgExtra.push({ url: await uploadImage(file), name });
-    }
-    if (folds.photos) toggleFold('photos');
-    renderResult(); toast(`이미지 ${files.length}장을 추가했습니다.`);
-  } catch (e) { if (e.message !== 'unauthorized') toast('이미지 올리기 실패: ' + e.message, true); }
-}
-function removeQuoteImage(url) {
-  if (quote.imgExtra.some(i => i.url === url)) quote.imgExtra = quote.imgExtra.filter(i => i.url !== url);
-  else quote.imgRemoved.push(url);
-  renderResult();
-}
-function resetQuoteImages() { quote.imgRemoved = []; quote.imgExtra = []; renderResult(); }
-
-// 장비 선택 영역 (간단 작성 칩 + 상세 작성 목록)
 function renderPicks() {
-  $('setLoader').innerHTML = '<option value="">세트 구성으로 바로 담기…</option>' + db.sets.map((s, i) =>
-    `<option value="${s.id}">${esc(`${i + 1}. ${s.name} · ${s.type} ${won(calcSet(s).final)}`)}</option>`).join('');
-  const groups = itemsByCategory();
-  $('chipList').innerHTML = groups.map(([cat, items]) => `
+  $('chipList').innerHTML = itemsByCategory().map(([cat, items]) => `
     <div class="chip-group">
       <p>${esc(cat)}</p>
       <div class="chips">${items.map(p => {
         const n = quote.qty[p.id] || 0;
-        return `<button class="chip ${n ? 'on' : ''}" onclick="toggleItem(${p.id})"><span><b>${esc(p.name)}</b>(${won(p.price)})${n > 1 ? ' ×' + n : ''}</span>${n ? '<img src="/img/ui/x.svg" alt="빼기">' : ''}</button>`;
+        const price = p.price ? won(p.price) : '무료';
+        return `<button class="chip big ${n ? 'on' : ''}" onclick="toggleItem(${p.id})">
+          <span class="chip-pic ${p.image ? '' : 'none'}" ${bg(p.image)}></span>
+          <span class="chip-text"><b>${esc(p.name)}</b><span>${price}${p.max ? ` · 최대 ${p.max}${p.unit || '개'}` : ''}</span></span>
+          ${n ? `<span class="chip-n">${n > 1 ? '×' + n : '✓'}</span>` : ''}
+        </button>`;
       }).join('')}</div>
     </div>`).join('');
-  $('pickList').innerHTML = groups.map(([cat, items]) => `
-    <div class="cat-head">${esc(cat)}</div>
-    ${items.map(p => {
-      const n = quote.qty[p.id] || 0;
-      return `
-      <div class="pick ${n ? 'sel' : ''}">
-        <div class="info">
-          <div class="thumb ${p.image ? 'has' : ''}" ${bg(p.image)}></div>
-          <div><b>${esc(p.name)}</b><span>정상가 ${won(p.price)}${p.sale !== p.price ? ` · 행사가 ${won(p.sale)}` : ''}</span></div>
-        </div>
-        <div class="stepper">
-          <button onclick="step(${p.id}, -1)" ${n ? '' : 'disabled'} aria-label="빼기"><img src="/img/ui/minus-square.svg" alt="" width="30" height="30"></button>
-          <b>${n}</b>
-          <button onclick="step(${p.id}, 1)" aria-label="더하기"><img src="/img/ui/plus-square.svg" alt="" width="30" height="30"></button>
-        </div>
-      </div>`;
-    }).join('')}`).join('');
-  applyFolds();
   renderResult();
 }
 
-// 견적 내역 영역
+// ───────── 견적 내역 ─────────
 function renderResult() {
   const cands = candidates();
   if (typeof quote.setChoice === 'number' && !cands.some(s => s.id === quote.setChoice)) quote.setChoice = 'auto';
@@ -307,12 +284,44 @@ function renderResult() {
       ${opt('none', !set, `세트 미적용 (단품 합계) · 월 ${won(compute(null).final)}`)}
     </div>`;
 
-  $('lineBody').innerHTML = r.lines.map(l => `
-    <tr>
-      <td>${l.kind === 'set' ? '세트 상품' : '추가 장비'}</td>
-      <td>${esc(l.name)}${l.kind === 'set' ? `<small>세트가 ${won(l.final)}</small>` : (l.eventDisc ? `<small>행사가 ${won(l.final / l.qty)}</small>` : '')}</td>
-      <td>${num(l.unit)}</td><td>${l.qty}</td><td>${l.kind === 'set' ? '세트' : '대'}</td><td>${num(l.list)} 원</td>
-    </tr>`).join('') || '<tr><td colspan="6" class="empty">왼쪽에서 장비를 선택하세요.</td></tr>';
+  const qtyCell = (l, onSet) => `
+    <div class="qstep">
+      <button onclick="${onSet}(${l.qty - 1})" aria-label="빼기">−</button>
+      <input type="number" min="0" value="${l.qty}" onchange="${onSet}(this.value)" onkeydown="if (event.key === 'Enter') this.blur()">
+      <button onclick="${onSet}(${l.qty + 1})" aria-label="더하기">＋</button>
+    </div>`;
+  const last = r.lines.length - 1;
+  $('lineBody').innerHTML = r.lines.map((l, i) => {
+    const k = esc(l.key);
+    const move = `<td class="mv"><button onclick="moveLine('${k}', -1)" ${i ? '' : 'disabled'} aria-label="위로">↑</button><button onclick="moveLine('${k}', 1)" ${i < last ? '' : 'disabled'} aria-label="아래로">↓</button></td>`;
+    if (l.kind === 'manual') {
+      const m = quote.manual.find(x => x.key === l.key);
+      return `<tr class="manual" data-key="${k}">${move}
+        <td><input class="cell" value="${esc(m.label)}" placeholder="항목" oninput="editManual('${k}', 'label', this)"></td>
+        <td><input class="cell" value="${esc(m.name)}" placeholder="설명" oninput="editManual('${k}', 'name', this)"></td>
+        <td><input class="cell num" type="number" min="0" value="${m.unit || ''}" placeholder="0" oninput="editManual('${k}', 'unit', this)"></td>
+        <td>${qtyCell(l, `setManualQty.bind(null, '${k}')`)}</td>
+        <td><input class="cell" value="${esc(m.uom)}" placeholder="개" oninput="editManual('${k}', 'uom', this)"></td>
+        <td><input class="cell num" type="number" value="${m.amount || ''}" placeholder="0" data-amount oninput="editManual('${k}', 'amount', this)"></td>
+        <td class="ac"><button onclick="removeLine('${k}')" title="줄 삭제" aria-label="줄 삭제">✕</button></td>
+      </tr>`;
+    }
+    const setter = l.kind === 'set' ? 'setSetQty' : `setItemQty.bind(null, ${l.itemId})`;
+    return `<tr data-key="${k}">${move}
+      <td>${esc(l.label)}</td>
+      <td>${esc(l.name)}${l.kind === 'set' ? `<small>세트가 ${won(l.final / l.qty)}</small>` : (l.eventDisc ? `<small>행사가 ${won(l.final / l.qty)}</small>` : '')}</td>
+      <td class="num">${num(l.unit)}</td>
+      <td>${qtyCell(l, setter)}</td>
+      <td>${esc(l.uom)}</td>
+      <td class="num">${num(l.list)} 원</td>
+      <td class="ac"><button onclick="convertLine('${k}')" title="직접 수정" aria-label="직접 수정">✎</button><button onclick="removeLine('${k}')" title="줄 삭제" aria-label="줄 삭제">✕</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" class="empty">왼쪽에서 장비를 선택하거나 항목을 직접 추가하세요.</td></tr>';
+  renderTotals(r);
+}
+
+// 합계·사진 영역만 다시 그린다 (직접 작성 칸을 입력하는 중에도 커서가 유지되도록)
+function renderTotals(r = current()) {
   $('tList').textContent = num(r.list) + ' 원';
   $('tSet').textContent = minus(r.setDisc);
   $('tEvent').textContent = minus(r.eventDisc);
@@ -337,33 +346,158 @@ function renderResult() {
   $('photoList').classList.toggle('is-empty', !images.length);
   $('imgReset').hidden = !quote.imgRemoved.length && !quote.imgExtra.length;
   $('notesReset').hidden = !quote.notes;
+  applyFolds();
   $('editBanner').innerHTML = !quote.editingId ? '' : quote.editingStatus === 'draft'
     ? '<span class="badge yellow">임시저장한 견적을 이어서 작성 중</span>'
     : '<span class="badge yellow">저장된 견적 수정 중 · 저장하면 같은 링크에 덮어씁니다</span>';
 }
 
+// 세트 줄 수량: 세트 구성 장비를 세트 수만큼 늘리거나 줄인다
+function setSetQty(n) {
+  const set = currentSet(candidates());
+  if (!set) return;
+  const delta = Math.max(0, Math.floor(Number(n)) || 0) - setCount(set);
+  for (const [id, c] of Object.entries(set.comp)) setQty(id, (quote.qty[id] || 0) + c * delta);
+  renderPicks();
+}
+// 추가 장비 줄 수량: 세트에 들어간 대수는 그대로 두고 남는 대수만 바꾼다
+function setItemQty(id, n) {
+  const set = currentSet(candidates());
+  const inSet = (set?.comp[id] || 0) * setCount(set);
+  setQty(id, inSet + Math.max(0, Math.floor(Number(n)) || 0));
+  renderPicks();
+}
+function setManualQty(key, n) {
+  const m = quote.manual.find(x => x.key === key);
+  m.qty = Math.max(0, Math.floor(Number(n)) || 0);
+  m.amount = (Number(m.unit) || 0) * m.qty;
+  renderResult();
+}
+function editManual(key, field, el) {
+  const m = quote.manual.find(x => x.key === key);
+  if (['unit', 'amount'].includes(field)) m[field] = Number(el.value) || 0; else m[field] = el.value;
+  if (field === 'unit') {   // 단가를 바꾸면 금액 = 단가 × 수량 (금액 칸은 따로 고칠 수도 있다)
+    m.amount = m.unit * (Number(m.qty) || 0);
+    el.closest('tr').querySelector('[data-amount]').value = m.amount || '';
+  }
+  renderTotals();
+}
+function addManual() {
+  const key = 'm' + Date.now().toString(36);
+  quote.manual.push({ key, label: '', name: '', unit: 0, qty: 1, uom: '개', amount: 0 });
+  renderResult();
+  document.querySelector(`#lineBody tr[data-key="${key}"] input`)?.focus();
+}
+// 기본 세트·상품 줄을 직접 작성 줄로 바꾼다 (지금 금액은 그대로 옮긴다)
+function convertLine(key) {
+  const l = current().lines.find(x => x.key === key);
+  if (!l || !confirm(EDIT_WARNING)) return;
+  const m = { key: 'm' + Date.now().toString(36), label: l.label, name: l.name, unit: l.qty ? Math.round(l.final / l.qty) : 0, qty: l.qty, uom: l.uom, amount: l.final };
+  const order = current().lines.map(x => x.key);
+  order[order.indexOf(key)] = m.key;
+  quote.order = order;
+  quote.manual.push(m);
+  if (l.kind === 'set') {
+    const set = currentSet(candidates()), k = setCount(set);
+    for (const [id, c] of Object.entries(set.comp)) setQty(id, (quote.qty[id] || 0) - c * k);
+  } else setQty(l.itemId, (quote.qty[l.itemId] || 0) - l.qty);
+  renderPicks();
+}
+function removeLine(key) {
+  if (key.startsWith('m')) quote.manual = quote.manual.filter(m => m.key !== key);
+  else if (key === 'set') return setSetQty(0);
+  else return setItemQty(Number(key.split(':')[1]), 0);
+  renderResult();
+}
+function moveLine(key, delta) {
+  const order = current().lines.map(x => x.key);
+  const i = order.indexOf(key), j = i + delta;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  quote.order = order;
+  renderResult();
+}
+
+function applySpecial() {
+  quote.special = Math.max(0, Number($('qSpecial').value) || 0);
+  quote.specialMemo = $('qSpecialMemo').value;
+  renderTotals();
+  toast(quote.special ? `특별 할인 ${won(quote.special)}을 적용했습니다.` : '특별 할인을 해제했습니다.');
+}
+function applyNotes() {
+  quote.notes = $('qNotes').value.split('\n').map(s => s.trim()).filter(Boolean);
+  renderTotals();
+  toast('참고사항을 이 견적에 적용했습니다.');
+}
+function resetNotes() {
+  quote.notes = null; $('qNotes').value = quoteNotes().join('\n');
+  renderTotals();
+}
+async function addQuoteImage() {
+  const file = await pickFile();
+  if (file) addQuoteFiles([file]);
+}
+// 파일 선택 · 끌어다 놓기 · 붙여넣기로 들어온 사진을 이 견적에 추가
+async function addQuoteFiles(files) {
+  if (!files.length) return toast('이미지 파일(PNG·JPG·WEBP)만 넣을 수 있습니다.', true);
+  try {
+    toast('이미지 올리는 중…');
+    for (const file of files) {
+      const name = /^image\.\w+$/.test(file.name) ? '제품 이미지' : file.name.replace(/\.[^.]+$/, '');   // 붙여넣은 이미지는 이름이 없다
+      quote.imgExtra.push({ url: await uploadImage(file), name });
+    }
+    if (folds.photos) toggleFold('photos');
+    renderTotals(); toast(`이미지 ${files.length}장을 추가했습니다.`);
+  } catch (e) { if (e.message !== 'unauthorized') toast('이미지 올리기 실패: ' + e.message, true); }
+}
+function removeQuoteImage(url) {
+  if (quote.imgExtra.some(i => i.url === url)) quote.imgExtra = quote.imgExtra.filter(i => i.url !== url);
+  else quote.imgRemoved.push(url);
+  renderTotals();
+}
+function resetQuoteImages() { quote.imgRemoved = []; quote.imgExtra = []; renderTotals(); }
+
 // ───────── 임시저장 / 저장 / 완료 모달 ─────────
+const stateOf = recipients => {
+  const { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra, manual, order, groupId } = quote;
+  return { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra, manual, order, groupId, recipients };
+};
+const hasWho = r => r.customer.trim() || r.name.trim();
+
 // asDraft: 임시저장(작성중). 아니면 작성완료로 저장하고 완료 모달을 띄운다.
+// 수신자가 여러 명이면 수신자마다 견적서를 하나씩 만들고 같은 묶음(groupId)으로 저장한다.
 // 어느 쪽이든 저장한 뒤에는 화면을 비워서 다음 사람이 새로 쓸 수 있게 한다.
 async function saveQuoteToServer(asDraft) {
-  const q = snapshot();
-  if (!asDraft && !q.lines.length) return toast('장비를 먼저 선택하세요.', true);
-  if (asDraft && !q.lines.length && !q.customer && !q.phone) return toast('임시저장할 내용이 없습니다. 고객명이나 장비를 먼저 입력하세요.', true);
-  if (!asDraft && !q.customer && !confirm('고객명이 비어 있습니다. 그대로 저장할까요?')) return;
-  const buttons = [$('saveBtn'), $('draftBtn')];
-  buttons.forEach(b => { b.disabled = true; });
+  const recips = quote.recipients.filter((r, i) => i === 0 || r.customer || r.name || r.phone);
+  const first = snapshot(recips[0]);
+  if (!asDraft && !first.lines.length) return toast('장비를 선택하거나 항목을 직접 추가하세요.', true);
+  if (asDraft && !first.lines.length && !recips.some(r => r.customer || r.name || r.phone)) return toast('임시저장할 내용이 없습니다. 고객 정보나 장비를 먼저 입력하세요.', true);
+  if (!asDraft && recips.some(r => !hasWho(r)) && !confirm('상호나 고객 성함이 비어 있는 수신자가 있습니다. 그대로 저장할까요?')) return;
+  for (const b of [$('saveBtn'), $('draftBtn')]) b.disabled = true;
   try {
-    const image = asDraft ? undefined : await htmlToPng(renderOgCard(q), 1);
-    const { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra } = quote;
-    const body = JSON.stringify({ quote: q, image, status: asDraft ? 'draft' : 'done', state: { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra } });
-    const { id } = quote.editingId
-      ? await api('/api/quotes/' + quote.editingId, { method: 'PUT', body })
-      : await api('/api/quotes', { method: 'POST', body });
     const wasDone = quote.editingId && quote.editingStatus !== 'draft';
+    if (asDraft) {
+      const body = JSON.stringify({ quote: first, status: 'draft', state: stateOf(recips), groupId: quote.groupId });
+      if (quote.editingId) await api('/api/quotes/' + quote.editingId, { method: 'PUT', body });
+      else await api('/api/quotes', { method: 'POST', body });
+    } else {
+      if (recips.length > 1 && !quote.groupId) quote.groupId = 'g' + Math.random().toString(36).slice(2, 12);
+      const saved = [];
+      for (const [i, r] of recips.entries()) {
+        const q = snapshot(r);
+        const image = await htmlToPng(renderOgCard(q), 1);
+        const body = JSON.stringify({ quote: q, image, status: 'done', state: stateOf([r]), groupId: quote.groupId });
+        const { id } = i === 0 && quote.editingId
+          ? await api('/api/quotes/' + quote.editingId, { method: 'PUT', body })
+          : await api('/api/quotes', { method: 'POST', body });
+        saved.push({ id, q });
+      }
+      showQuoteModal(saved, saved.length > 1 ? `견적서 ${saved.length}건 생성이 완료 되었습니다!` : wasDone ? '견적서가 수정 되었습니다!' : '견적서 생성이 완료 되었습니다!',
+        saved.length > 1 ? '수신자별로 따로 저장되었습니다. 대시보드에서 하나씩 수정할 수 있습니다.' : '저장된 견적서는 대시보드에서 확인할 수 있습니다.');
+    }
     quote = emptyQuote();
     PAGES.quote();
     if (asDraft) toast('임시저장했습니다. "임시저장 불러오기"나 대시보드에서 이어서 작성할 수 있습니다.');
-    else showQuoteModal(id, q, wasDone ? '견적서가 수정 되었습니다!' : '견적서 생성이 완료 되었습니다!', '저장된 견적서는 대시보드에서 확인할 수 있습니다.');
   } catch (e) {
     if (e.message !== 'unauthorized') toast('저장 실패: ' + e.message, true);
   } finally {
@@ -376,11 +510,15 @@ async function loadQuote(id) {
   try {
     const { quote: q, state, status } = await api('/api/quotes/' + id);
     if (!state) return toast('이 견적은 예전 방식으로 저장되어 수정할 수 없습니다. 보기만 가능합니다.', true);
-    quote = { ...emptyQuote(), ...state, customer: q.customer, phone: q.phone, date: q.date || today(), staff: q.staff === COMPANY.name ? '' : q.staff, editingId: id, editingStatus: status };
+    const recipients = status === 'draft' && state.recipients?.length
+      ? state.recipients.map(r => ({ ...emptyRecipient(), ...r }))
+      : [{ customer: q.customer || '', name: q.name || '', phone: q.phone || '' }];
+    quote = { ...emptyQuote(), ...state, recipients, date: q.date || today(), staff: q.staff === COMPANY.name ? '' : q.staff, editingId: id, editingStatus: status };
     closeModal(); showPage('quote');
     toast('견적을 불러왔습니다. 금액은 현재 금액표 기준으로 다시 계산됩니다.');
   } catch (e) { if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message, true); }
 }
+const whoLabel = s => [s.customer, s.name].filter(Boolean).join(' · ');
 // 임시저장 불러오기: 작성 중인 견적 목록에서 고른다
 async function openDrafts() {
   let drafts;
@@ -393,7 +531,7 @@ async function openDrafts() {
     <div class="draft-list">
       ${drafts.map(s => `
         <button class="draft" onclick="loadQuote('${s.id}')">
-          <span><b>${esc(s.customer || '(고객명 없음)')}</b> <span class="sub">담당자 ${esc(s.staff || COMPANY.name)} · ${when(s)} 저장</span></span>
+          <span><b>${esc(whoLabel(s) || '(고객명 없음)')}</b> <span class="sub">담당자 ${esc(s.staff || COMPANY.name)} · ${when(s)} 저장</span></span>
           <span class="sub">${esc(s.items || '선택한 장비 없음')}</span>
         </button>`).join('') || '<p class="sub" style="padding:24px 0; text-align:center">임시저장한 견적이 없습니다.</p>'}
     </div>`, true);
@@ -402,38 +540,56 @@ async function openDrafts() {
 // 문자 내용: 기본 문구의 {칸}을 견적 내용으로 채운다
 function fillMessage(q, url) {
   const items = q.lines.map(l => l.name + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ');
-  const values = { 고객명: q.customer || '고객', 상품구성: items, 월렌탈료: num(q.final), 담당자: q.staff || COMPANY.name, 링크: url };
-  return (db.settings.message || '').replace(/\{(고객명|상품구성|월렌탈료|담당자|링크)\}/g, (_, k) => values[k]);
+  const values = { 고객명: whoOf(q), 상호: q.customer || '', 성함: q.name || '', 상품구성: items, 월렌탈료: num(q.final), 담당자: q.staff || COMPANY.name, 링크: url };
+  return (db.settings.message || '').replace(/\{(고객명|상호|성함|상품구성|월렌탈료|담당자|링크)\}/g, (_, k) => values[k]);
 }
 
-let modalQuote = null;   // 모달에 떠 있는 견적 (대시보드에서도 같이 씀)
-let modalId = null;
-function showQuoteModal(id, rawQuote, title, sub) {
-  const q = normalizeQuote(rawQuote);
-  const url = `${location.origin}/q/${id}`;
-  modalQuote = q; modalId = id;
+// 완료·보기 모달. list = [{ id, q }] (여러 수신자로 만든 묶음이면 탭으로 넘겨 본다)
+let modalList = [], modalIdx = 0;
+const modalUrl = id => `${location.origin}/q/${id}`;
+function showQuoteModal(list, title, sub) {
+  modalList = list.map(x => ({ id: x.id, q: normalizeQuote(x.q) }));
+  modalIdx = 0;
+  const many = modalList.length > 1;
   openModal(`
     <h2>${esc(title)}</h2>
     <p>${esc(sub)}</p>
     <div class="modal-body">
+      ${many ? `<div class="tabs modal-tabs" id="modalTabs"></div>` : ''}
       <div class="pager-wrap">
         <button class="page-arrow prev" onclick="modalPage(-1)" aria-label="이전 페이지">‹</button>
-        <div id="modalSheet" class="sheet-fit paged">${renderSheet(q)}</div>
+        <div id="modalSheet" class="sheet-fit paged"></div>
         <button class="page-arrow next" onclick="modalPage(1)" aria-label="다음 페이지">›</button>
       </div>
       <p class="page-count sub" id="modalPageCount"></p>
       <div class="modal-actions">
         <button class="btn" onclick="modalSaveImage(this)"><img src="/img/ui/save.svg" alt="">이미지 저장</button>
         <button class="btn" onclick="copyText($('modalMsg').value).then(() => { toast('문자 내용을 복사했습니다.'); markSent(); })"><img src="/img/ui/copy.svg" alt="">내용 문자 복사</button>
-        <button class="btn" onclick="copyText('${url}').then(() => { toast('링크를 복사했습니다. 카톡·톡톡에 붙여넣으면 미리보기가 함께 나갑니다.'); markSent(); })"><img src="/img/ui/link.svg" alt="">URL 공유(카카오톡,톡톡 공유용)</button>
+        <button class="btn" onclick="copyText(modalUrl(modalList[modalIdx].id)).then(() => { toast('링크를 복사했습니다. 카톡·톡톡에 붙여넣으면 미리보기가 함께 나갑니다.'); markSent(); })"><img src="/img/ui/link.svg" alt="">URL 공유(카카오톡,톡톡 공유용)</button>
+        ${many ? `<button class="btn" onclick="copyAllLinks()"><img src="/img/ui/link.svg" alt="">전체 링크 한번에 복사</button>` : ''}
         <button class="btn" onclick="window.print()">인쇄 / PDF</button>
       </div>
       <textarea class="msg-edit" id="modalMsg" spellcheck="false"></textarea>
-      <div class="url-row"><span>URL 링크 |</span><a href="${url}" target="_blank" rel="noopener">${url}</a></div>
+      <div class="url-row"><span>URL 링크 |</span><a id="modalUrl" target="_blank" rel="noopener"></a></div>
     </div>`);
-  $('modalMsg').value = fillMessage(q, url);
+  showModalQuote(0);
+}
+function showModalQuote(i) {
+  modalIdx = i;
+  const { id, q } = modalList[i];
+  if ($('modalTabs')) $('modalTabs').innerHTML = modalList.map((x, j) =>
+    `<button class="${j === i ? 'on' : ''}" onclick="showModalQuote(${j})">${esc(whoLabel(x.q) || '수신자 ' + (j + 1))}</button>`).join('');
+  $('modalSheet').innerHTML = renderSheet(q);
+  layoutSheets($('modalSheet'));
   fitSheets();
   modalPageNo = 0; modalPage(0);
+  $('modalMsg').value = fillMessage(q, modalUrl(id));
+  $('modalUrl').href = $('modalUrl').textContent = modalUrl(id);
+}
+async function copyAllLinks() {
+  await copyText(modalList.map(({ id, q }) => `${whoLabel(q) || '견적서'} : ${modalUrl(id)}`).join('\n'));
+  toast(`링크 ${modalList.length}개를 복사했습니다.`);
+  for (const { id } of modalList) await markSent(id);
 }
 // 견적서가 2장 이상이면 화살표로 한 장씩 넘겨 본다 (이미지 저장·인쇄는 항상 전체)
 let modalPageNo = 0;
@@ -453,7 +609,8 @@ addEventListener('keydown', e => {
 });
 
 // 링크나 문자를 복사하면 고객에게 전달한 것으로 보고 상태를 '전달'로 바꾼다
-async function markSent(id = modalId) {
+async function markSent(id = modalList[modalIdx]?.id) {
+  if (!id) return;
   try {
     await api('/api/quotes/' + id, { method: 'PATCH', body: JSON.stringify({ status: 'sent' }) });
     const row = dashQuotes.find(s => s.id === id);
@@ -463,7 +620,7 @@ async function markSent(id = modalId) {
 
 async function modalSaveImage(btn) {
   btn.disabled = true;
-  try { await saveSheetImage(modalQuote); toast('견적서 이미지를 저장했습니다.'); }
+  try { await saveSheetImage(modalList[modalIdx].q); toast('견적서 이미지를 저장했습니다.'); }
   catch (e) { toast('이미지 저장 실패: ' + e.message, true); }
   btn.disabled = false;
 }

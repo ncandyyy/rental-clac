@@ -47,7 +47,7 @@ PAGES.price = function renderPricePage() {
           <textarea style="margin-top:8px" oninput="editSetting('notes', this.value)">${esc(db.settings.notes.join('\n'))}</textarea></label>
         <label><b class="label">담당자 목록 :</b> <span class="sub">한 줄에 한 명 · 견적 담당자 칸 자동완성</span>
           <textarea style="margin-top:8px" placeholder="예) 김다은" oninput="editSetting('staff', this.value)">${esc((db.settings.staff || []).join('\n'))}</textarea></label>
-        <label style="grid-column:1 / -1"><b class="label">문자 내용 :</b> <span class="sub">{고객명} {상품구성} {월렌탈료} {담당자} {링크} 자리에 견적 내용이 자동으로 들어갑니다.</span>
+        <label style="grid-column:1 / -1"><b class="label">문자 내용 :</b> <span class="sub">{고객명} {상호} {성함} {상품구성} {월렌탈료} {담당자} {링크} 자리에 견적 내용이 자동으로 들어갑니다.</span>
           <textarea style="margin-top:8px; min-height:280px" oninput="editSetting('message', this.value)">${esc(db.settings.message)}</textarea></label>
       </div>
     </div>`;
@@ -80,7 +80,7 @@ function editItem(id, field, el) {
   if (field === 'name') renderSets();
 }
 function addItem() {
-  db.items.push({ id: nextId(db.items), name: '', category: '기타', price: 0, sale: 0, tbd: false, memo: '', image: '' });
+  db.items.push({ id: nextId(db.items), name: '', category: '기타', price: 0, sale: 0, tbd: false, memo: '', image: '', unit: '대', max: 0 });
   saveDb(); renderItems();
 }
 function removeItem(id) {
@@ -206,6 +206,7 @@ function importDb() {
       items: d.items.map((r, i) => ({
         id: Number(r.id) || i + 1, name: String(r.name ?? ''), category: String(r.category ?? ''),
         price: Number(r.price) || 0, sale: Number(r.sale) || 0, tbd: !!r.tbd, memo: String(r.memo ?? ''), image: image(r.image),
+        unit: String(r.unit || '대').slice(0, 10), max: Math.max(0, Math.floor(Number(r.max) || 0)),
       })),
       sets: d.sets.map((r, i) => ({
         id: Number(r.id) || i + 1, group: String(r.group ?? ''), name: String(r.name ?? ''),

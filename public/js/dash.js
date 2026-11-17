@@ -18,13 +18,13 @@ PAGES.dash = async function renderDashPage() {
     <div class="stat-row" id="dashStats"></div>
     <div class="row" style="margin-bottom:12px">
       <div class="tabs" id="dashTabs"></div>
-      <input class="input" style="width:260px" id="dashText" placeholder="고객명 · 연락처 · 상품 구성 검색" value="${esc(dashFilter.text)}" oninput="setDash('text', this.value)">
+      <input class="input" style="width:260px" id="dashText" placeholder="상호 · 성함 · 연락처 · 상품 구성 검색" value="${esc(dashFilter.text)}" oninput="setDash('text', this.value)">
       <label class="field">기간 <input type="date" value="${dashFilter.from}" oninput="setDash('from', this.value)"> ~ <input type="date" value="${dashFilter.to}" oninput="setDash('to', this.value)"></label>
       <button class="btn white" onclick="Object.assign(dashFilter, { staff: '', status: '', text: '', from: '', to: '', page: 1 }); PAGES.dash()">검색 초기화</button>
     </div>
     <div class="table-card">
       <table class="list">
-        <thead><tr><th>상태</th><th>견적일</th><th>고객명(상호)</th><th>연락처</th><th>담당자</th><th>상품 구성</th><th class="num">월 렌탈료(VAT 포함)</th><th></th></tr></thead>
+        <thead><tr><th>상태</th><th>견적일</th><th>상호 / 고객 성함</th><th>연락처</th><th>담당자</th><th>상품 구성</th><th class="num">월 렌탈료(VAT 포함)</th><th></th></tr></thead>
         <tbody id="dashBody"><tr><td colspan="8" class="sub">불러오는 중…</td></tr></tbody>
       </table>
       <div class="pager" id="dashPager"></div>
@@ -40,9 +40,11 @@ function setDash(field, value) { dashFilter[field] = value; dashFilter.page = 1;
 function dashMatches() {
   const text = dashFilter.text.trim().toLowerCase();
   return dashQuotes.filter(s =>
-    (!text || [s.customer, s.phone, s.items, s.staff].some(v => String(v || '').toLowerCase().includes(text))) &&
+    (!text || [s.customer, s.name, s.phone, s.items, s.staff].some(v => String(v || '').toLowerCase().includes(text))) &&
     (!dashFilter.from || s.date >= dashFilter.from) && (!dashFilter.to || s.date <= dashFilter.to));
 }
+
+const groupSize = g => dashQuotes.filter(x => x.groupId === g).length;
 
 function renderDash() {
   const matched = dashMatches();
@@ -71,7 +73,8 @@ function renderDash() {
     <tr>
       <td><span class="badge ${STATUS[statusOf(s)][1]}">${STATUS[statusOf(s)][0]}</span></td>
       <td>${esc(s.date)}</td>
-      <td><b>${esc(s.customer || '(이름 없음)')}</b></td>
+      <td><b>${esc(s.customer || s.name || '(이름 없음)')}</b>${s.customer && s.name ? `<small class="sub" style="display:block">${esc(s.name)}</small>` : ''}
+        ${s.groupId && groupSize(s.groupId) > 1 ? `<span class="badge" title="여러 수신자로 함께 만든 견적">묶음 ${groupSize(s.groupId)}건</span>` : ''}</td>
       <td>${esc(s.phone)}</td>
       <td>${esc(s.staff || COMPANY.name)}</td>
       <td>${esc(s.items)}</td>
@@ -93,12 +96,12 @@ function renderDash() {
 async function viewQuote(id) {
   try {
     const { quote: q } = await api('/api/quotes/' + id);
-    showQuoteModal(id, q, `${q.customer || '고객'}님 견적서`, `${q.date} · 담당자 ${q.staff || COMPANY.name}`);
+    showQuoteModal([{ id, q }], `${whoLabel(q) || '고객'} 견적서`, `${q.date} · 담당자 ${q.staff || COMPANY.name}`);
   } catch (e) { if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message, true); }
 }
 async function deleteQuote(id) {
   const s = dashQuotes.find(x => x.id === id);
-  if (!confirm(`${s?.customer || '이'} 견적을 삭제할까요?${s && statusOf(s) !== 'draft' ? ' 고객에게 보낸 링크도 더 이상 열리지 않습니다.' : ''}`)) return;
+  if (!confirm(`${s ? whoLabel(s) || '이' : '이'} 견적을 삭제할까요?${s && statusOf(s) !== 'draft' ? ' 고객에게 보낸 링크도 더 이상 열리지 않습니다.' : ''}`)) return;
   try {
     await api('/api/quotes/' + id, { method: 'DELETE' });
     dashQuotes = dashQuotes.filter(x => x.id !== id);
@@ -111,8 +114,8 @@ function exportCsv() {
   const rows = dashMatches().filter(s => (!dashFilter.staff || (s.staff || COMPANY.name) === dashFilter.staff) && (!dashFilter.status || statusOf(s) === dashFilter.status));
   if (!rows.length) return toast('내보낼 견적이 없습니다.', true);
   const cell = v => { let t = String(v ?? ''); if (/^[=+\-@]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
-  const lines = [['상태', '견적일', '고객명', '연락처', '담당자', '상품 구성', '월 렌탈료(VAT 별도)', '월 렌탈료(VAT 포함)', '약정(개월)', '저장일시', '링크'],
-    ...rows.map(s => [STATUS[statusOf(s)][0], s.date, s.customer, s.phone, s.staff || COMPANY.name, s.items, s.supply, s.final, s.months, s.updatedAt || s.createdAt, `${location.origin}/q/${s.id}`])];
+  const lines = [['상태', '견적일', '상호', '고객 성함', '연락처', '담당자', '상품 구성', '월 렌탈료(VAT 별도)', '월 렌탈료(VAT 포함)', '약정(개월)', '저장일시', '링크'],
+    ...rows.map(s => [STATUS[statusOf(s)][0], s.date, s.customer, s.name, s.phone, s.staff || COMPANY.name, s.items, s.supply, s.final, s.months, s.updatedAt || s.createdAt, `${location.origin}/q/${s.id}`])];
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + lines.map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
   a.download = `견적목록_${today()}.csv`;

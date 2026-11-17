@@ -12,13 +12,20 @@ const BASE_ITEMS = [
   [10, '토스포스기', '포스기', 16000, 16000, 1, '토스포스기+금전함 합산 역산값. 금전함과 나눠서 확정 필요'],
   [11, '기타포스기', '포스기', 18000, 18000, 1, '기타포스기+금전함 합산 역산값. 금전함과 나눠서 확정 필요'],
   [12, '금전함', '기타', 0, 0, 1, '포스기 역산값에 포함시켜 0원 처리. 정상가 확정 필요'],
-  [13, '오더포스(주문)', '포스기', 15000, 15000, 0, ''],
+  [13, '오더포스(주문)', '포스 프로그램', 15000, 15000, 0, ''],
   [14, '포스기 듀얼모니터', '기타', 4000, 4000, 0, ''],
   [15, '토스POS 키오스크(데스크형)+리더기', '키오스크', 40000, 40000, 1, '세트로만 판매. 세트 일반가 그대로'],
   [16, '토스POS 키오스크(스텐드형)+리더기', '키오스크', 42000, 42000, 1, '세트로만 판매. 세트 일반가 그대로'],
   [17, '기타POS 키오스크(데스크형)+리더기', '키오스크', 42000, 42000, 1, '세트로만 판매. 세트 일반가 그대로'],
   [18, '기타POS 키오스크(스텐드형)+리더기', '키오스크', 44000, 44000, 1, '세트로만 판매. 세트 일반가 그대로'],
+  [19, '토스 테이블 QR', '기타', 0, 0, 0, '무료 제공 · 최대 20개'],
+  [20, '토스포스', '포스 프로그램', 0, 0, 0, ''],
+  [21, '기타포스', '포스 프로그램', 0, 0, 0, ''],
+  [22, '페이앤포스', '포스 프로그램', 0, 0, 0, ''],
+  [23, 'OK포스', '포스 프로그램', 0, 0, 0, ''],
 ];
+// 단위와 최대 수량이 기본값(대, 제한 없음)과 다른 품목
+const BASE_ITEM_EXTRA = { 19: { unit: '개', max: 20 }, 13: { unit: '식' }, 20: { unit: '식' }, 21: { unit: '식' }, 22: { unit: '식' }, 23: { unit: '식' } };
 // 세트: [구분, 상품 구성, 유형, 일반가, 행사가(null=없음), 매출·특별조건, 직원 확인, 비고, 구성 단품 id 목록]
 const PAID = '3년 약정 / CMS 필수', FREE = '내부 승인 필요 / 3년 약정 / CMS 조건부';
 const BASE_SETS = [
@@ -52,7 +59,7 @@ const BASE_SETS = [
   ['키오스크', '기타POS 베리어키오스크(스텐드형)+리더기', '유료렌탈', 44000, 41000, '', PAID, '', [18]],
 ];
 // 분류 표시 순서 (여기에 없는 분류는 뒤에 붙는다)
-const CATEGORY_ORDER = ['결제단말기', '프린터기', '포스기', '기타', '키오스크'];
+const CATEGORY_ORDER = ['결제단말기', '프린터기', '포스기', '포스 프로그램', '기타', '키오스크'];
 
 // 단품 기본 이미지: 단품 id → 파일
 const BASE_ITEM_IMAGES = { 1: 'front', 2: 'connect', 3: 'cat', 4: 'terminal', 5: 'printer', 8: 'tablet', 10: 'pos', 11: 'pos', 12: 'cashbox', 15: 'kiosk', 16: 'kiosk', 17: 'kiosk', 18: 'kiosk' };
@@ -65,7 +72,7 @@ const BASE_SETTINGS = {
     '초기 방문 설치비는 무상으로 제공됩니다.',
     '프로그램 이용료 무료 및 매출 집계 분석 서비스를 지원합니다.',
   ],
-  // 사용할 수 있는 칸: {고객명} {상품구성} {월렌탈료} {담당자} {링크}
+  // 사용할 수 있는 칸: {고객명} {상호} {성함} {상품구성} {월렌탈료} {담당자} {링크}
   message: `[페이앤밴] 맞춤형 결제 솔루션 견적 안내
 안녕하세요, 사장님! 든든한 비즈니스 파트너 페이앤밴입니다.
 
@@ -87,9 +94,10 @@ const BASE_SETTINGS = {
 
 function baseDb() {
   return {
-    v: 3,
+    v: 4,
     items: BASE_ITEMS.map(([id, name, category, price, sale, tbd, memo]) => ({
       id, name, category, price, sale, tbd: !!tbd, memo, image: BASE_ITEM_IMAGES[id] ? `/img/lib/${BASE_ITEM_IMAGES[id]}.webp` : '',
+      unit: '대', max: 0, ...BASE_ITEM_EXTRA[id],
     })),
     sets: BASE_SETS.map(([group, name, type, price, sale, cond, check, memo, comp], i) => ({
       id: i + 1, group, name, type, price, sale, cond, check, memo, image: '',
@@ -124,6 +132,18 @@ function upgradeDb(db) {
       for (const s of db.sets) delete s.comp[9];
     }
   }
-  db.v = 3;
+  if (!(db.v >= 4)) {
+    // 포스 프로그램 분류 추가(오더포스 이동, 나머지 프로그램 0원) · 토스 테이블 QR(무료, 최대 20개) 추가
+    const add = (name, category, extra) => {
+      if (db.items.some(p => p.name === name)) return;
+      db.items.push({ id: db.items.reduce((m, p) => Math.max(m, p.id), 0) + 1, name, category, price: 0, sale: 0, tbd: false, memo: extra.memo || '', image: '', unit: extra.unit, max: extra.max || 0 });
+    };
+    const order = db.items.find(p => p.id === 13 && p.name.includes('오더포스'));
+    if (order && order.category === '포스기') { order.category = '포스 프로그램'; order.unit = '식'; }
+    add('토스 테이블 QR', '기타', { unit: '개', max: 20, memo: '무료 제공 · 최대 20개' });
+    for (const name of ['토스포스', '기타포스', '페이앤포스', 'OK포스']) add(name, '포스 프로그램', { unit: '식' });
+  }
+  for (const p of db.items) { if (!p.unit) p.unit = '대'; if (p.max === undefined) p.max = 0; }
+  db.v = 4;
   return db;
 }

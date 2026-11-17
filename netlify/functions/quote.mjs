@@ -13,7 +13,7 @@ export default async (req, context) => {
   }
   const q = rec.public || rec;   // 내부 정보(state)는 내려보내지 않는다
   const origin = new URL(req.url).origin;
-  const title = `${q.customer || '고객'}님 렌탈 견적서`;
+  const title = `${q.name || q.customer || '고객'} 대표님 렌탈 견적서`;
   const desc = `월 렌탈료 ${won(q.final ?? q.vat)} (VAT 포함) · 견적 내용을 확인해보세요.`;
   const version = encodeURIComponent(rec.updatedAt || rec.createdAt || '');
 
@@ -45,7 +45,7 @@ export default async (req, context) => {
 <script src="/sheet.js"></script>
 <script>
   document.getElementById('sheet').innerHTML = renderSheet(window.QUOTE);
-  fitSheets();
+  document.fonts.ready.then(() => { layoutSheets(document.getElementById('sheet')); fitSheets(); });
   addEventListener('resize', fitSheets);
 </script>
 </body>

@@ -12,11 +12,11 @@ function cleanQuote(q, allowEmpty) {
   if (!q || typeof q !== 'object' || !Array.isArray(q.lines) || q.lines.length > 60) return null;
   if (!q.lines.length && !allowEmpty) return null;   // 장비가 없는 견적은 임시저장만 가능
   return {
-    customer: text(q.customer, 60), phone: text(q.phone, 40), date: text(q.date, 10), staff: text(q.staff, 30),
+    customer: text(q.customer, 60), name: text(q.name, 40), phone: text(q.phone, 40), date: text(q.date, 10), staff: text(q.staff, 30),
     months: num(q.months),
     lines: q.lines.map(l => ({
-      kind: l.kind === 'set' ? 'set' : 'item', name: text(l.name, 120), qty: num(l.qty),
-      unit: num(l.unit), list: num(l.list), setDisc: num(l.setDisc), eventDisc: num(l.eventDisc), final: num(l.final),
+      kind: ['set', 'item', 'manual'].includes(l.kind) ? l.kind : 'item', label: text(l.label, 30), name: text(l.name, 120), qty: num(l.qty),
+      uom: text(l.uom, 10), unit: num(l.unit), list: num(l.list), setDisc: num(l.setDisc), eventDisc: num(l.eventDisc), final: num(l.final),
     })),
     list: num(q.list), setDisc: num(q.setDisc), eventDisc: num(q.eventDisc), special: num(q.special),
     supply: num(q.supply), vatAmount: num(q.vatAmount), final: num(q.final), total: num(q.total),
@@ -26,13 +26,14 @@ function cleanQuote(q, allowEmpty) {
       .map(i => ({ url: i.url, name: text(i.name, 60) })),
   };
 }
-const summary = (id, q, times, status) => ({
-  id, ...times, status, date: q.date, customer: q.customer, phone: q.phone, staff: q.staff, months: q.months,
+const GROUP_ID = /^[A-Za-z0-9_-]{6,24}$/;
+const summary = (id, q, times, status, groupId) => ({
+  id, ...times, status, groupId: groupId || undefined, date: q.date, customer: q.customer, name: q.name, phone: q.phone, staff: q.staff, months: q.months,
   items: q.lines.map(l => l.name + (l.qty > 1 ? ' ×' + l.qty : '')).join(' / '),
   supply: q.supply, final: q.final,
 });
 const sheetRow = (action, origin, s, q) => ({
-  action, id: s.id, 상태: { draft: '작성중', done: '작성완료', sent: '전달' }[s.status] || '', 저장일시: s.updatedAt || s.createdAt, 견적일: s.date, 담당자: s.staff, 고객명: s.customer, 연락처: s.phone,
+  action, id: s.id, 상태: { draft: '작성중', done: '작성완료', sent: '전달' }[s.status] || '', 저장일시: s.updatedAt || s.createdAt, 견적일: s.date, 담당자: s.staff, 고객명: s.customer, 성함: s.name, 연락처: s.phone, 묶음: s.groupId || '',
   구성: s.items, 정상가합계: q?.list, 세트할인: q?.setDisc, 이벤트할인: q?.eventDisc, 특별할인: q?.special,
   월렌탈료_VAT별도: s.supply, 월렌탈료_VAT포함: s.final, 약정개월: s.months, 링크: `${origin}/q/${s.id}`,
 });
@@ -90,7 +91,8 @@ export default async (req, context) => {
       if (!q) return json({ error: '견적 내용이 올바르지 않습니다.' }, 400);
       const image = draft ? null : parseDataUrl(body.image, ['image/png'], 3_000_000);   // 임시저장은 미리보기 이미지가 없다
       if (!draft && !image) return json({ error: '미리보기 이미지가 올바르지 않습니다.' }, 400);
-      const state = body.state && typeof body.state === 'object' && JSON.stringify(body.state).length < 20_000 ? body.state : null;
+      const state = body.state && typeof body.state === 'object' && JSON.stringify(body.state).length < 40_000 ? body.state : null;
+      const groupId = typeof body.groupId === 'string' && GROUP_ID.test(body.groupId) ? body.groupId : null;   // 한 번에 여러 수신자로 만든 견적 묶음
 
       const now = new Date().toISOString();
       let key = id, createdAt = now, status = draft ? 'draft' : 'done';
@@ -105,8 +107,8 @@ export default async (req, context) => {
       }
       const times = { createdAt, updatedAt: now };
       if (image) await quotes.set(key + '.png', image.bytes);
-      await quotes.setJSON(key, { public: q, state, status, ...times });
-      const s = summary(key, q, times, status);
+      await quotes.setJSON(key, { public: q, state, status, groupId, ...times });
+      const s = summary(key, q, times, status, groupId);
       await updateIndex(list => [s, ...list.filter(x => x.id !== key)]);
       await pushSheet(sheetRow('upsert', origin, s, q));
       return json({ id: key, status });
