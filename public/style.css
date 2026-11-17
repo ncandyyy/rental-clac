@@ -20,6 +20,7 @@
 }
 
 * { box-sizing: border-box; }
+body { word-break: keep-all; overflow-wrap: break-word; }   /* 한글이 단어 중간에서 끊기지 않게 */
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
@@ -160,11 +161,26 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .setpick b { color: var(--text); font-weight: 700; }
 
 .two { display: flex; gap: 24px; align-items: stretch; min-height: 240px; }
-.two > .lead { width: 204px; flex: none; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.two > .lead { width: 240px; flex: none; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .two > .lead > div:first-child { display: flex; flex-direction: column; gap: 8px; }
 .two > .panel { flex: 1; min-width: 0; }
 .dropzone { border: 1px dashed var(--hint); border-radius: 8px; padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 208px; }
-.dropzone .empty { margin: auto; color: var(--hint); text-align: center; line-height: 1.6; }
+.dropzone { position: relative; }
+.dropzone.is-empty { align-content: center; justify-content: center; }
+.dropzone .empty { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--hint); text-align: center; line-height: 1.5; padding: 16px; }
+.dropzone .empty b { margin-top: 6px; font-size: 15px; font-weight: 700; color: var(--muted); }
+/* 사진을 끌고 들어왔을 때 */
+.card.two.drag { outline: none; background: var(--card) !important; }
+.card.two.drag .dropzone { border: 2px dashed var(--text); background: var(--fill); }
+.card.two.drag .dropzone > * { opacity: .15; }
+.card.two.drag .dropzone::after, .img-card.drag::after {
+  content: '여기에 놓으면 추가됩니다'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: var(--text); pointer-events: none;
+}
+.img-card { position: relative; }
+.img-card.drag { outline: 2px dashed var(--text); outline-offset: -2px; background: var(--fill) !important; }
+.img-card.drag > * { opacity: .15; }
+.img-card.drag::after { content: '여기에 놓기'; }
 .photo { position: relative; width: 92px; }
 .photo div { width: 92px; height: 92px; border-radius: 4px; background: var(--bg) center/contain no-repeat; }
 .photo p { margin-top: 4px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -147,7 +147,7 @@ PAGES.quote = function renderQuotePage() {
           <div class="lead">
             <div>
               <p class="title">제품 이미지 등록</p>
-              <p class="sub">자동으로 이미지 리스트에서 상품을 불러옵니다.<br>사진을 끌어다 놓거나, 복사한 이미지를 붙여넣기(Ctrl+V)해도 추가됩니다.</p>
+              <p class="sub">이미지 리스트에 등록된 제품 사진을<br>자동으로 불러옵니다.</p>
             </div>
             <div class="row">
               <button class="btn" onclick="addQuoteImage()">직접 등록하기</button>
@@ -162,7 +162,7 @@ PAGES.quote = function renderQuotePage() {
           <div class="lead">
             <div>
               <p class="title">참고 사항(안내사항)</p>
-              <p class="sub">수정 후 적용 시 참고사항 변경이 가능합니다.<br>한 줄에 한 항목씩 적어주세요.</p>
+              <p class="sub">내용을 고친 뒤 등록을 누르면<br>이 견적서에 적용됩니다.<br>한 줄에 한 항목씩 적어주세요.</p>
             </div>
             <div class="row">
               <button class="btn" onclick="applyNotes()">등록</button>
@@ -323,7 +323,13 @@ function renderResult() {
   $('photoList').innerHTML = images.map(i => `
     <div class="photo"><div ${bg(i.url)}></div><p title="${esc(i.name)}">${esc(i.name)}</p>
       <button onclick="removeQuoteImage('${esc(i.url)}')" aria-label="사진 빼기">✕</button></div>`).join('')
-    || '<p class="empty">장비를 선택하면 등록된 제품 사진이 여기에 표시됩니다.<br>사진이 없는 제품은 이미지 리스트에서 등록할 수 있습니다.</p>';
+    || `<div class="empty">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <b>사진을 여기로 드래그 앤 드롭</b>
+        <span>복사한 이미지는 Ctrl+V로 붙여넣을 수 있습니다.</span>
+        <span>장비를 선택하면 등록된 제품 사진이 자동으로 들어옵니다.</span>
+      </div>`;
+  $('photoList').classList.toggle('is-empty', !images.length);
   $('imgReset').hidden = !quote.imgRemoved.length && !quote.imgExtra.length;
   $('notesReset').hidden = !quote.notes;
   $('editBanner').innerHTML = quote.editingId ? '<span class="badge yellow">저장된 견적 수정 중 · 저장하면 같은 링크에 덮어씁니다</span>' : '';

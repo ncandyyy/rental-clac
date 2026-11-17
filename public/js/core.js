@@ -122,7 +122,7 @@ async function uploadImage(file) {
 const imageFiles = data => [...(data?.files || [])].filter(f => /^image\/(png|jpeg|webp)$/.test(f.type));
 // 끌어다 놓을 수 있는 영역 표시 (onDrop은 이미지 파일 배열을 받는다)
 function dropAttrs(handler) {
-  return `ondragover="event.preventDefault(); this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ` +
+  return `ondragover="event.preventDefault(); this.classList.add('drag')" ondragleave="if (!this.contains(event.relatedTarget)) this.classList.remove('drag')" ` +
     `ondrop="event.preventDefault(); this.classList.remove('drag'); ${handler}"`;
 }
 // 복사한 이미지 붙여넣기(Ctrl+V): 지금 보고 있는 화면이 받는다
