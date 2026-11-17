@@ -655,7 +655,9 @@ function showQuoteModal(list, title, sub, start = 0) {
         <button class="btn" onclick="window.print()">인쇄 / PDF</button>
       </div>
       <textarea class="msg-edit" id="modalMsg" spellcheck="false"></textarea>
-      <div class="url-row"><span>URL 링크 |</span><a id="modalUrl" target="_blank" rel="noopener"></a></div>
+      <div class="url-list">${modalList.map(({ id, q }) => `
+        <div class="url-row"><span>URL 링크 |${many ? ` ${esc(q.customer || q.name || '견적서')}` : ''}</span><a href="${modalUrl(id)}" target="_blank" rel="noopener">${modalUrl(id)}</a></div>`).join('')}
+      </div>
     </div>`);
   // 문자 내용은 묶음 전체를 한 번에 담는다 (탭을 바꿔도 고친 문자는 그대로)
   $('modalMsg').value = many ? fillGroupMessage(modalList) : fillMessage(modalList[0].q, modalUrl(modalList[0].id));
@@ -670,7 +672,6 @@ function showModalQuote(i) {
   layoutSheets($('modalSheet'));
   fitSheets();
   modalPageNo = 0; modalPage(0);
-  $('modalUrl').href = $('modalUrl').textContent = modalUrl(id);
 }
 async function copyAllLinks() {
   await copyText(modalList.map(({ id, q }) => `${whoLabel(q) || '견적서'} : ${modalUrl(id)}`).join('\n'));

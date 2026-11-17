@@ -227,7 +227,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .modal-actions img { width: 12px; height: 12px; }
 .msg-edit { width: 100%; min-height: 240px; resize: vertical; border: 1px solid transparent; background: var(--bg); padding: 16px; font-size: 15px; line-height: 1.5; color: var(--muted); outline: none; border-radius: 0; }
 .msg-edit:focus { color: var(--text2); }
-.url-row { display: flex; justify-content: space-between; gap: 16px; margin-top: 9px; padding: 16px; background: var(--bg); font-weight: 700; font-size: 15px; color: var(--hint); }
+.url-list { display: flex; flex-direction: column; gap: 6px; margin-top: 9px; }
+.url-row { display: flex; justify-content: space-between; gap: 16px; white-space: nowrap; padding: 16px; background: var(--bg); font-weight: 700; font-size: 15px; color: var(--hint); }
 .url-row a { color: var(--hint); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .url-row a:hover { color: var(--text2); }
 
