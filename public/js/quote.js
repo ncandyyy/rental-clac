@@ -214,7 +214,7 @@ function renderRecipients() {
       ${many ? `<span class="badge">수신자 ${i + 1}</span>` : ''}
       <label class="field">상호 <input placeholder="입력" value="${esc(r.customer)}" oninput="setRecipient(${i}, 'customer', this.value)"></label>
       <label class="field">고객 성함 <input placeholder="입력" value="${esc(r.name)}" oninput="setRecipient(${i}, 'name', this.value)"></label>
-      <label class="field">연락처 <input placeholder="입력" value="${esc(r.phone)}" oninput="setRecipient(${i}, 'phone', this.value)"></label>
+      <label class="field">연락처 <input placeholder="숫자만 입력" inputmode="tel" maxlength="13" value="${esc(r.phone)}" oninput="this.value = formatPhone(this.value); setRecipient(${i}, 'phone', this.value)"></label>
       ${i === 0
         ? '<button class="btn icon" onclick="addRecipient()" title="수신자 추가" aria-label="수신자 추가">＋</button>'
         : `<button class="btn icon" onclick="removeRecipient(${i})" title="이 수신자 빼기" aria-label="수신자 빼기">✕</button>`}

@@ -1,14 +1,16 @@
 // 금액표(단품가·세트가)와 기본 문구 읽기 / 저장
-import { json, denied, store } from '../lib/common.mjs';
+import { json, denied, roleOf, store } from '../lib/common.mjs';
 
 export default async req => {
   const no = denied(req);
   if (no) return no;
 
   if (req.method === 'GET') {
-    return json({ db: await store('pricing').get('db', { type: 'json' }) });   // 저장된 적 없으면 null
+    return json({ db: await store('pricing').get('db', { type: 'json' }), role: roleOf(req).role });   // 저장된 적 없으면 null
   }
   if (req.method === 'PUT') {
+    const notAdmin = denied(req, true);   // 금액표·이미지 리스트 수정은 관리자만
+    if (notAdmin) return notAdmin;
     const text = await req.text();
     if (text.length > 800_000) return json({ error: '데이터가 너무 큽니다.' }, 413);
     let db;

@@ -6,13 +6,23 @@ export const json = (data, status = 200) =>
 
 const hash = s => createHash('sha256').update(s).digest();
 
-// 직원 공용 비밀번호 확인. 통과하면 null, 아니면 에러 응답을 돌려준다.
-export function denied(req) {
-  const expected = process.env.SITE_PASSWORD;
-  if (!expected) return json({ error: 'Netlify 환경변수 SITE_PASSWORD가 설정되지 않았습니다.' }, 503);
+// 직급별 비밀번호: ADMIN_PASSWORD(관리자) / SITE_PASSWORD(직원)
+// ADMIN_PASSWORD를 아직 넣지 않았다면 SITE_PASSWORD가 관리자 권한을 가진다 (예전 설정 그대로 동작).
+export function roleOf(req) {
+  const staff = process.env.SITE_PASSWORD, admin = process.env.ADMIN_PASSWORD;
+  if (!staff && !admin) return { error: json({ error: 'Netlify 환경변수 SITE_PASSWORD가 설정되지 않았습니다.' }, 503) };
   let given = '';
   try { given = decodeURIComponent(req.headers.get('x-password') || ''); } catch { /* 잘못된 인코딩 */ }
-  if (!timingSafeEqual(hash(given), hash(expected))) return json({ error: '비밀번호가 올바르지 않습니다.' }, 401);
+  const same = expected => !!expected && timingSafeEqual(hash(given), hash(expected));
+  if (same(admin)) return { role: 'admin' };
+  if (same(staff)) return { role: admin ? 'staff' : 'admin' };
+  return { error: json({ error: '비밀번호가 올바르지 않습니다.' }, 401) };
+}
+// 통과하면 null, 아니면 에러 응답. adminOnly면 관리자만 통과.
+export function denied(req, adminOnly) {
+  const r = roleOf(req);
+  if (r.error) return r.error;
+  if (adminOnly && r.role !== 'admin') return json({ error: '관리자만 할 수 있습니다.' }, 403);
   return null;
 }
 

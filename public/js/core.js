@@ -5,6 +5,8 @@ const PW_KEY = 'rental-pw', PAGE_KEY = 'rental-page';
 localStorage.removeItem('rental-quote-v4');   // 예전 버전이 브라우저에 남겨 둔 작성 중 견적 정리
 let pw = localStorage.getItem(PW_KEY) || '';
 let db = null;          // { items, sets, settings } - 서버에 저장되는 공용 금액표
+let role = 'staff';     // admin(관리자) / staff(직원)
+const ADMIN_PAGES = ['price', 'images'];   // 관리자만 보는 화면
 const PAGES = {};       // 화면 이름 → 그리는 함수 (각 화면 파일에서 등록)
 
 const $ = id => document.getElementById(id);
@@ -37,15 +39,19 @@ function logout() {
 async function boot() {
   if (!pw) return showLogin('');
   try {
-    const saved = (await api('/api/db')).db;
-    db = saved ? upgradeDb(saved) : baseDb();   // 저장된 금액표가 없으면 기준표로 시작
+    const res = await api('/api/db');
+    db = res.db ? upgradeDb(res.db) : baseDb();   // 저장된 금액표가 없으면 기준표로 시작
+    role = res.role === 'admin' ? 'admin' : 'staff';
   } catch (e) {
     if (e.message !== 'unauthorized') showLogin(e.message);
     return;
   }
   localStorage.setItem(PW_KEY, pw);
   $('login').hidden = true; $('app').hidden = false;
-  showPage(PAGES[localStorage.getItem(PAGE_KEY)] ? localStorage.getItem(PAGE_KEY) : 'quote');
+  for (const b of document.querySelectorAll('.nav [data-page]')) b.hidden = role !== 'admin' && ADMIN_PAGES.includes(b.dataset.page);
+  $('roleBadge').textContent = role === 'admin' ? '관리자' : '직원';
+  const last = localStorage.getItem(PAGE_KEY);
+  showPage(PAGES[last] && (role === 'admin' || !ADMIN_PAGES.includes(last)) ? last : 'quote');
 }
 
 // 금액표 저장: 수정이 멈추면 0.6초 뒤 서버에 저장
@@ -66,8 +72,25 @@ function setSaveState(text, isError) {
   for (const el of document.querySelectorAll('.save-state')) { el.textContent = text; el.className = 'save-state ' + (isError ? 'err' : 'sub'); }
 }
 
+// 연락처: 숫자만 넣어도 010-0000-0000 / 02-000-0000 / 1577-0000 모양으로 나눈다
+function formatPhone(value) {
+  const d = String(value).replace(/\D/g, '').slice(0, 11);
+  if (d.startsWith('02')) {   // 서울 지역번호
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return `${d.slice(0, 2)}-${d.slice(2)}`;
+    if (d.length <= 9) return `${d.slice(0, 2)}-${d.slice(2, 5)}-${d.slice(5)}`;
+    return `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6, 10)}`;
+  }
+  if (/^1[5-9]/.test(d) && d.length <= 8) return d.length <= 4 ? d : `${d.slice(0, 4)}-${d.slice(4)}`;   // 1577-0000 같은 대표번호
+  if (d.length <= 3) return d;
+  if (d.length <= 7) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  if (d.length <= 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+}
+
 // ───────── 화면 전환 / 알림 / 모달 ─────────
 function showPage(name) {
+  if (role !== 'admin' && ADMIN_PAGES.includes(name)) name = 'quote';
   localStorage.setItem(PAGE_KEY, name);
   for (const b of document.querySelectorAll('.nav [data-page]')) b.classList.toggle('on', b.dataset.page === name);
   for (const p of Object.keys(PAGES)) $('page-' + p).hidden = p !== name;
