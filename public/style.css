@@ -352,11 +352,9 @@ button:not(:disabled):active { transform: scale(.96); }
 .modal-tabs { justify-content: center; margin-bottom: 14px; }
 
 /* 대시보드: 묶음 견적 띠 */
-.list tr.grp td:first-child { box-shadow: inset 5px 0 0 #3182f6; padding-left: 16px; }
-.list tr.grp.grp0 td:first-child { box-shadow: inset 5px 0 0 #8b5cf6; }
-.list tr.grp td { background: #f7f9ff; }
-.list tr.grp.grp0 td { background: #faf7ff; }
-.list tr.grp:not(.grp-end) td { border-bottom-color: #e8edf8; }
+.list tr.grp td:first-child { box-shadow: inset 5px 0 0 var(--band); padding-left: 16px; }
+.list tr.grp td { background: var(--band-bg); }
+.list tr.grp:not(.grp-end) td { border-bottom-color: rgba(0, 0, 0, .04); }
 
 /* 인사말 */
 .greeting { font-size: 20px; font-weight: 700; color: var(--text); padding: 16px 0 14px; }

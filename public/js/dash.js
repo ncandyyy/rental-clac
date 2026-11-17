@@ -44,6 +44,8 @@ function dashMatches() {
     (!dashFilter.from || s.date >= dashFilter.from) && (!dashFilter.to || s.date <= dashFilter.to));
 }
 
+// 묶음 띠 색 [띠, 바탕]
+const BANDS = [['#3182f6', '#f4f8ff'], ['#8b5cf6', '#f8f5ff'], ['#10b981', '#f1fbf7'], ['#f59e0b', '#fffaf0'], ['#ec4899', '#fff5fa'], ['#06b6d4', '#f0fbfd'], ['#ef4444', '#fff5f5'], ['#84cc16', '#f7fcee']];
 const groupSize = g => dashQuotes.filter(x => x.groupId === g).length;
 // 같은 묶음 견적은 처음 나온 자리에 모아서 붙인다
 function groupTogether(list) {
@@ -79,18 +81,21 @@ function renderDash() {
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   dashFilter.page = Math.min(dashFilter.page, pages);
   const shown = rows.slice((dashFilter.page - 1) * PER_PAGE, dashFilter.page * PER_PAGE);
-  // 묶음 견적은 왼쪽 띠로 이어서 보여준다 (붙어 있는 묶음끼리는 색을 번갈아)
-  let band = 0;
+  // 묶음 견적은 왼쪽 띠로 이어서 보여준다. 색은 묶음마다 정해지고(새로고침해도 같은 색), 바로 위 묶음과는 겹치지 않게
+  let prevColor = -1;
   const bandOf = shown.map((s, i) => {
-    const grouped = s.groupId && groupSize(s.groupId) > 1;
-    if (!grouped) return null;
-    const prev = shown[i - 1], next = shown[i + 1];
-    const startsGroup = prev?.groupId !== s.groupId;
-    if (startsGroup) band++;
-    return `grp grp${band % 2}${startsGroup ? ' grp-start' : ''}${next?.groupId !== s.groupId ? ' grp-end' : ''}`;
+    if (!(s.groupId && groupSize(s.groupId) > 1)) return null;
+    const startsGroup = shown[i - 1]?.groupId !== s.groupId;
+    if (startsGroup) {
+      let c = [...s.groupId].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % BANDS.length;
+      if (c === prevColor) c = (c + 1) % BANDS.length;
+      prevColor = c;
+    }
+    const [line, fill] = BANDS[prevColor];
+    return { cls: `grp${startsGroup ? ' grp-start' : ''}${shown[i + 1]?.groupId !== s.groupId ? ' grp-end' : ''}`, style: `--band:${line};--band-bg:${fill}` };
   });
   $('dashBody').innerHTML = shown.map((s, i) => `
-    <tr class="${bandOf[i] || ''}">
+    <tr class="${bandOf[i]?.cls || ''}" style="${bandOf[i]?.style || ''}">
       <td><span class="badge ${STATUS[statusOf(s)][1]}">${STATUS[statusOf(s)][0]}</span></td>
       <td>${esc(s.date)}</td>
       <td><b>${esc(s.customer || s.name || '(이름 없음)')}</b>${s.customer && s.name ? `<small class="sub" style="display:block">${esc(s.name)}</small>` : ''}</td>
