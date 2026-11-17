@@ -8,8 +8,7 @@ const BASE_ITEMS = [
   [5, '유선프린터', '프린터기', 3000, 3000, 0, ''],
   [6, '무선프린터(TS400)', '프린터기', 4000, 4000, 0, ''],
   [7, '무선프린터(TS400EB)', '프린터기', 5000, 5000, 0, ''],
-  [8, '태블릿(레노버 IDEA TAB 11)', '포스기', 9000, 8000, 0, ''],
-  [9, '태블릿 거치대', '기타', 0, 0, 1, '기준표에 단품가 없음. 정상가 확정 필요'],
+  [8, '태블릿+거치대(레노버 IDEA TAB 11)', '포스기', 9000, 8000, 0, '태블릿과 거치대는 항상 함께 나간다'],
   [10, '토스포스기', '포스기', 16000, 16000, 1, '토스포스기+금전함 합산 역산값. 금전함과 나눠서 확정 필요'],
   [11, '기타포스기', '포스기', 18000, 18000, 1, '기타포스기+금전함 합산 역산값. 금전함과 나눠서 확정 필요'],
   [12, '금전함', '기타', 0, 0, 1, '포스기 역산값에 포함시켜 0원 처리. 정상가 확정 필요'],
@@ -42,11 +41,11 @@ const BASE_SETS = [
   ['포스기세트', '기타포스기+프론트+유프+금전함', '유료렌탈', 24000, 22000, '', PAID, '', [1, 5, 11, 12]],
   ['포스기세트', '기타포스기+프론트+터미널2+금전함', '유료렌탈', 24000, 22000, '', PAID, '', [1, 4, 11, 12]],
   ['포스기세트', '기타포스기+프론트+터미널2+유프+금전함', '유료렌탈', 27000, 25000, '', PAID, '', [1, 4, 5, 11, 12]],
-  ['태블릿', '태블릿+N커넥트+CAT단말기+거치대', '유료렌탈', 12000, 11000, '', PAID, '', [2, 3, 8, 9]],
-  ['태블릿', '태블릿+프론트+거치대', '유료렌탈', 9000, 7000, '', PAID, '', [1, 8, 9]],
-  ['태블릿', '태블릿+프론트+유프+거치대', '유료렌탈', 10000, 9000, '', PAID, '', [1, 5, 8, 9]],
-  ['태블릿', '태블릿+프론트+터미널2+거치대', '유료렌탈', 10000, 9000, '', PAID, '', [1, 4, 8, 9]],
-  ['태블릿', '태블릿+프론트+무선프린터+거치대', '유료렌탈', 12000, 10000, '', PAID, '무선프린터를 TS400으로 가정', [1, 6, 8, 9]],
+  ['태블릿', '태블릿+N커넥트+CAT단말기+거치대', '유료렌탈', 12000, 11000, '', PAID, '', [2, 3, 8]],
+  ['태블릿', '태블릿+프론트+거치대', '유료렌탈', 9000, 7000, '', PAID, '', [1, 8]],
+  ['태블릿', '태블릿+프론트+유프+거치대', '유료렌탈', 10000, 9000, '', PAID, '', [1, 5, 8]],
+  ['태블릿', '태블릿+프론트+터미널2+거치대', '유료렌탈', 10000, 9000, '', PAID, '', [1, 4, 8]],
+  ['태블릿', '태블릿+프론트+무선프린터+거치대', '유료렌탈', 12000, 10000, '', PAID, '무선프린터를 TS400으로 가정', [1, 6, 8]],
   ['키오스크', '토스POS 베리어키오스크(데스크형)+리더기', '유료렌탈', 40000, 38000, '', PAID, '', [15]],
   ['키오스크', '토스POS 베리어키오스크(스텐드형)+리더기', '유료렌탈', 42000, 39000, '', PAID, '', [16]],
   ['키오스크', '기타POS 베리어키오스크(데스크형)+리더기', '유료렌탈', 42000, 40000, '', PAID, '', [17]],
@@ -88,7 +87,7 @@ const BASE_SETTINGS = {
 
 function baseDb() {
   return {
-    v: 2,
+    v: 3,
     items: BASE_ITEMS.map(([id, name, category, price, sale, tbd, memo]) => ({
       id, name, category, price, sale, tbd: !!tbd, memo, image: BASE_ITEM_IMAGES[id] ? `/img/lib/${BASE_ITEM_IMAGES[id]}.webp` : '',
     })),
@@ -102,16 +101,29 @@ function baseDb() {
 
 // 예전 형식으로 저장된 금액표를 지금 형식으로 맞춘다 (금액·구성은 그대로 둔다)
 function upgradeDb(db) {
-  if (db.v >= 2 && db.settings) return db;
-  const oldCategory = { 1: '단말기', 2: '단말기', 3: '단말기', 4: '단말기', 5: '프린터', 6: '프린터', 7: '프린터', 8: '태블릿', 9: '태블릿', 10: '포스', 11: '포스', 12: '포스', 13: '포스', 14: '포스' };
   const base = baseDb();
-  for (const p of db.items) {
-    const b = base.items.find(x => x.id === p.id);
-    if (b && p.category === oldCategory[p.id]) p.category = b.category;   // 직접 바꾼 분류는 건드리지 않는다
-    if (p.image === undefined) p.image = b ? b.image : '';
+  if (!(db.v >= 2 && db.settings)) {
+    const oldCategory = { 1: '단말기', 2: '단말기', 3: '단말기', 4: '단말기', 5: '프린터', 6: '프린터', 7: '프린터', 8: '태블릿', 9: '태블릿', 10: '포스', 11: '포스', 12: '포스', 13: '포스', 14: '포스' };
+    const newCategory = { 1: '결제단말기', 2: '결제단말기', 3: '결제단말기', 4: '결제단말기', 5: '프린터기', 6: '프린터기', 7: '프린터기', 8: '포스기', 9: '기타', 10: '포스기', 11: '포스기', 12: '기타', 13: '포스기', 14: '기타' };
+    for (const p of db.items) {
+      const b = base.items.find(x => x.id === p.id);
+      if (p.category === oldCategory[p.id]) p.category = newCategory[p.id];   // 직접 바꾼 분류는 건드리지 않는다
+      if (p.image === undefined) p.image = b ? b.image : '';
+    }
+    for (const s of db.sets) if (s.image === undefined) s.image = '';
+    db.settings = { ...structuredClone(BASE_SETTINGS), ...(db.settings || {}) };
   }
-  for (const s of db.sets) if (s.image === undefined) s.image = '';
-  db.settings = { ...structuredClone(BASE_SETTINGS), ...(db.settings || {}) };
-  db.v = 2;
+  if (!(db.v >= 3)) {
+    // 태블릿과 거치대를 한 품목으로 합친다 (거치대 금액은 태블릿에 더하고, 세트 구성에서 거치대를 뺀다)
+    const tablet = db.items.find(p => p.id === 8 && p.name.includes('태블릿'));
+    const stand = db.items.find(p => p.id === 9 && p.name.includes('거치대'));
+    if (tablet && stand) {
+      tablet.price += stand.price; tablet.sale += stand.sale;
+      if (!tablet.name.includes('거치대')) tablet.name = tablet.name.replace('태블릿', '태블릿+거치대');
+      db.items = db.items.filter(p => p !== stand);
+      for (const s of db.sets) delete s.comp[9];
+    }
+  }
+  db.v = 3;
   return db;
 }
