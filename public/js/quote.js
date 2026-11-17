@@ -8,8 +8,8 @@ const emptyQuote = () => ({
   editingId: null,                // 저장된 견적을 고치는 중이면 그 id
 });
 let quote = (() => { try { return { ...emptyQuote(), ...JSON.parse(localStorage.getItem(QUOTE_KEY)) }; } catch { return emptyQuote(); } })();
-const FOLD_KEY = 'rental-folds';
-const folds = { simple: false, detail: false, photos: false, notes: false, ...JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') };   // 접힌 영역
+const FOLD_KEY = 'rental-folds-v2';
+const folds = { simple: false, detail: false, photos: false, notes: true, ...JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') };   // 접힌 영역
 
 function saveQuote() { localStorage.setItem(QUOTE_KEY, JSON.stringify(quote)); }
 
