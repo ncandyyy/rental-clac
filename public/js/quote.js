@@ -5,13 +5,14 @@ const emptyQuote = () => ({
   qty: {}, setChoice: 'auto',
   notes: null,                    // null이면 기본 참고사항 사용
   imgRemoved: [], imgExtra: [],   // 자동으로 불러온 사진 중 뺀 것 / 직접 올린 것
-  editingId: null,                // 저장된 견적을 고치는 중이면 그 id
+  editingId: null,                // 저장된(또는 임시저장한) 견적을 이어서 쓰는 중이면 그 id
+  editingStatus: null,            // 그 견적의 상태: draft / done / sent
 });
-let quote = (() => { try { return { ...emptyQuote(), ...JSON.parse(localStorage.getItem(QUOTE_KEY)) }; } catch { return emptyQuote(); } })();
+// 작성 중인 견적은 이 브라우저에 남기지 않는다. 새로고침하면 빈 화면이고, 이어서 쓰려면 임시저장한다.
+let quote = emptyQuote();
 const FOLD_KEY = 'rental-folds-v2';
 const folds = { simple: false, detail: false, photos: false, notes: true, ...JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') };   // 접힌 영역
 
-function saveQuote() { localStorage.setItem(QUOTE_KEY, JSON.stringify(quote)); }
 
 // ───────── 계산 ─────────
 const units = s => Object.values(s.comp).reduce((a, b) => a + b, 0);
@@ -75,6 +76,7 @@ PAGES.quote = function renderQuotePage() {
         <p class="title">기본 정보 입력</p>
         <div class="row">
           <span id="editBanner"></span>
+          <button class="btn white" onclick="openDrafts()">임시저장 불러오기</button>
           <button class="btn white" onclick="newQuote()">새 견적 작성</button>
         </div>
       </div>
@@ -172,14 +174,17 @@ PAGES.quote = function renderQuotePage() {
           <div class="panel"><textarea class="notes-edit" id="qNotes"></textarea></div>
         </div>
 
-        <button class="btn-big" id="saveBtn" onclick="saveQuoteToServer()">견적 저장하기</button>
+        <div class="save-row">
+          <button class="btn-big light" id="draftBtn" onclick="saveQuoteToServer(true)">임시저장</button>
+          <button class="btn-big" id="saveBtn" onclick="saveQuoteToServer()">견적 저장하기</button>
+        </div>
       </div>
     </div>`;
   $('qNotes').value = quoteNotes().join('\n');
   renderPicks();
 };
 
-function setInfo(field, value) { quote[field] = value; saveQuote(); renderResult(); }
+function setInfo(field, value) { quote[field] = value; renderResult(); }
 function toggleFold(name) { folds[name] = !folds[name]; localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); applyFolds(); }
 function applyFolds() {
   $('foldSimple').classList.toggle('closed', folds.simple);
@@ -191,39 +196,39 @@ function applyFolds() {
 function step(id, delta) {
   const n = Math.max(0, (quote.qty[id] || 0) + delta);
   if (n) quote.qty[id] = n; else delete quote.qty[id];
-  saveQuote(); renderPicks();
+  renderPicks();
 }
 function toggleItem(id) { step(id, quote.qty[id] ? -quote.qty[id] : 1); }
 function chooseSet(value) {
   quote.setChoice = value === 'auto' || value === 'none' ? value : Number(value);
-  saveQuote(); renderResult();
+  renderResult();
 }
 // 세트 구성을 그대로 담기
 function loadSet(id) {
   const s = db.sets.find(x => x.id === Number(id));
   if (!s) return;
   quote.qty = { ...s.comp }; quote.setChoice = s.id;
-  saveQuote(); renderPicks();
+  renderPicks();
 }
 function newQuote() {
   if (Object.keys(quote.qty).length && !confirm('작성 중인 내용을 지우고 새 견적을 시작할까요?')) return;
-  quote = { ...emptyQuote(), staff: quote.staff };
-  saveQuote(); PAGES.quote();
+  quote = emptyQuote();
+  PAGES.quote();
 }
 function applySpecial() {
   quote.special = Math.max(0, Number($('qSpecial').value) || 0);
   quote.specialMemo = $('qSpecialMemo').value;
-  saveQuote(); renderResult();
+  renderResult();
   toast(quote.special ? `특별 할인 ${won(quote.special)}을 적용했습니다.` : '특별 할인을 해제했습니다.');
 }
 function applyNotes() {
   quote.notes = $('qNotes').value.split('\n').map(s => s.trim()).filter(Boolean);
-  saveQuote(); renderResult();
+  renderResult();
   toast('참고사항을 이 견적에 적용했습니다.');
 }
 function resetNotes() {
   quote.notes = null; $('qNotes').value = quoteNotes().join('\n');
-  saveQuote(); renderResult();
+  renderResult();
 }
 async function addQuoteImage() {
   const file = await pickFile();
@@ -239,15 +244,15 @@ async function addQuoteFiles(files) {
       quote.imgExtra.push({ url: await uploadImage(file), name });
     }
     if (folds.photos) toggleFold('photos');
-    saveQuote(); renderResult(); toast(`이미지 ${files.length}장을 추가했습니다.`);
+    renderResult(); toast(`이미지 ${files.length}장을 추가했습니다.`);
   } catch (e) { if (e.message !== 'unauthorized') toast('이미지 올리기 실패: ' + e.message, true); }
 }
 function removeQuoteImage(url) {
   if (quote.imgExtra.some(i => i.url === url)) quote.imgExtra = quote.imgExtra.filter(i => i.url !== url);
   else quote.imgRemoved.push(url);
-  saveQuote(); renderResult();
+  renderResult();
 }
-function resetQuoteImages() { quote.imgRemoved = []; quote.imgExtra = []; saveQuote(); renderResult(); }
+function resetQuoteImages() { quote.imgRemoved = []; quote.imgExtra = []; renderResult(); }
 
 // 장비 선택 영역 (간단 작성 칩 + 상세 작성 목록)
 function renderPicks() {
@@ -332,32 +337,66 @@ function renderResult() {
   $('photoList').classList.toggle('is-empty', !images.length);
   $('imgReset').hidden = !quote.imgRemoved.length && !quote.imgExtra.length;
   $('notesReset').hidden = !quote.notes;
-  $('editBanner').innerHTML = quote.editingId ? '<span class="badge yellow">저장된 견적 수정 중 · 저장하면 같은 링크에 덮어씁니다</span>' : '';
+  $('editBanner').innerHTML = !quote.editingId ? '' : quote.editingStatus === 'draft'
+    ? '<span class="badge yellow">임시저장한 견적을 이어서 작성 중</span>'
+    : '<span class="badge yellow">저장된 견적 수정 중 · 저장하면 같은 링크에 덮어씁니다</span>';
 }
 
-// ───────── 저장 / 완료 모달 ─────────
-async function saveQuoteToServer() {
+// ───────── 임시저장 / 저장 / 완료 모달 ─────────
+// asDraft: 임시저장(작성중). 아니면 작성완료로 저장하고 완료 모달을 띄운다.
+// 어느 쪽이든 저장한 뒤에는 화면을 비워서 다음 사람이 새로 쓸 수 있게 한다.
+async function saveQuoteToServer(asDraft) {
   const q = snapshot();
-  if (!q.lines.length) return toast('장비를 먼저 선택하세요.', true);
-  if (!q.customer && !confirm('고객명이 비어 있습니다. 그대로 저장할까요?')) return;
-  const btn = $('saveBtn');
-  btn.disabled = true; btn.textContent = '저장 중…';
+  if (!asDraft && !q.lines.length) return toast('장비를 먼저 선택하세요.', true);
+  if (asDraft && !q.lines.length && !q.customer && !q.phone) return toast('임시저장할 내용이 없습니다. 고객명이나 장비를 먼저 입력하세요.', true);
+  if (!asDraft && !q.customer && !confirm('고객명이 비어 있습니다. 그대로 저장할까요?')) return;
+  const buttons = [$('saveBtn'), $('draftBtn')];
+  buttons.forEach(b => { b.disabled = true; });
   try {
-    const image = await htmlToPng(renderOgCard(q), 1);
+    const image = asDraft ? undefined : await htmlToPng(renderOgCard(q), 1);
     const { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra } = quote;
-    const body = JSON.stringify({ quote: q, image, state: { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra } });
+    const body = JSON.stringify({ quote: q, image, status: asDraft ? 'draft' : 'done', state: { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra } });
     const { id } = quote.editingId
       ? await api('/api/quotes/' + quote.editingId, { method: 'PUT', body })
       : await api('/api/quotes', { method: 'POST', body });
-    const wasEdit = !!quote.editingId;
-    quote.editingId = id;
-    saveQuote(); renderResult();
-    showQuoteModal(id, q, wasEdit ? '견적서가 수정 되었습니다!' : '견적서 생성이 완료 되었습니다!', '저장된 견적서는 대시보드에서 확인할 수 있습니다.');
+    const wasDone = quote.editingId && quote.editingStatus !== 'draft';
+    quote = emptyQuote();
+    PAGES.quote();
+    if (asDraft) toast('임시저장했습니다. "임시저장 불러오기"나 대시보드에서 이어서 작성할 수 있습니다.');
+    else showQuoteModal(id, q, wasDone ? '견적서가 수정 되었습니다!' : '견적서 생성이 완료 되었습니다!', '저장된 견적서는 대시보드에서 확인할 수 있습니다.');
   } catch (e) {
     if (e.message !== 'unauthorized') toast('저장 실패: ' + e.message, true);
   } finally {
-    btn.disabled = false; btn.textContent = '견적 저장하기';
+    for (const b of [$('saveBtn'), $('draftBtn')]) if (b) b.disabled = false;
   }
+}
+
+// 저장된 견적(임시저장 포함)을 불러와 이어서 쓴다. 저장하면 같은 견적에 덮어쓴다.
+async function loadQuote(id) {
+  try {
+    const { quote: q, state, status } = await api('/api/quotes/' + id);
+    if (!state) return toast('이 견적은 예전 방식으로 저장되어 수정할 수 없습니다. 보기만 가능합니다.', true);
+    quote = { ...emptyQuote(), ...state, customer: q.customer, phone: q.phone, date: q.date || today(), staff: q.staff === COMPANY.name ? '' : q.staff, editingId: id, editingStatus: status };
+    closeModal(); showPage('quote');
+    toast('견적을 불러왔습니다. 금액은 현재 금액표 기준으로 다시 계산됩니다.');
+  } catch (e) { if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message, true); }
+}
+// 임시저장 불러오기: 작성 중인 견적 목록에서 고른다
+async function openDrafts() {
+  let drafts;
+  try { drafts = (await api('/api/quotes')).quotes.filter(s => s.status === 'draft'); }
+  catch (e) { if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message, true); return; }
+  const when = s => new Date(s.updatedAt || s.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  openModal(`
+    <h2 style="font-size:20px">임시저장 불러오기</h2>
+    <p>작성 중이던 견적을 고르면 이어서 작성할 수 있습니다.</p>
+    <div class="draft-list">
+      ${drafts.map(s => `
+        <button class="draft" onclick="loadQuote('${s.id}')">
+          <span><b>${esc(s.customer || '(고객명 없음)')}</b> <span class="sub">담당자 ${esc(s.staff || COMPANY.name)} · ${when(s)} 저장</span></span>
+          <span class="sub">${esc(s.items || '선택한 장비 없음')}</span>
+        </button>`).join('') || '<p class="sub" style="padding:24px 0; text-align:center">임시저장한 견적이 없습니다.</p>'}
+    </div>`, true);
 }
 
 // 문자 내용: 기본 문구의 {칸}을 견적 내용으로 채운다
@@ -368,10 +407,11 @@ function fillMessage(q, url) {
 }
 
 let modalQuote = null;   // 모달에 떠 있는 견적 (대시보드에서도 같이 씀)
+let modalId = null;
 function showQuoteModal(id, rawQuote, title, sub) {
   const q = normalizeQuote(rawQuote);
   const url = `${location.origin}/q/${id}`;
-  modalQuote = q;
+  modalQuote = q; modalId = id;
   openModal(`
     <h2>${esc(title)}</h2>
     <p>${esc(sub)}</p>
@@ -384,8 +424,8 @@ function showQuoteModal(id, rawQuote, title, sub) {
       <p class="page-count sub" id="modalPageCount"></p>
       <div class="modal-actions">
         <button class="btn" onclick="modalSaveImage(this)"><img src="/img/ui/save.svg" alt="">이미지 저장</button>
-        <button class="btn" onclick="copyText($('modalMsg').value).then(() => toast('문자 내용을 복사했습니다.'))"><img src="/img/ui/copy.svg" alt="">내용 문자 복사</button>
-        <button class="btn" onclick="copyText('${url}').then(() => toast('링크를 복사했습니다. 카톡·톡톡에 붙여넣으면 미리보기가 함께 나갑니다.'))"><img src="/img/ui/link.svg" alt="">URL 공유(카카오톡,톡톡 공유용)</button>
+        <button class="btn" onclick="copyText($('modalMsg').value).then(() => { toast('문자 내용을 복사했습니다.'); markSent(); })"><img src="/img/ui/copy.svg" alt="">내용 문자 복사</button>
+        <button class="btn" onclick="copyText('${url}').then(() => { toast('링크를 복사했습니다. 카톡·톡톡에 붙여넣으면 미리보기가 함께 나갑니다.'); markSent(); })"><img src="/img/ui/link.svg" alt="">URL 공유(카카오톡,톡톡 공유용)</button>
         <button class="btn" onclick="window.print()">인쇄 / PDF</button>
       </div>
       <textarea class="msg-edit" id="modalMsg" spellcheck="false"></textarea>
@@ -411,6 +451,15 @@ addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') modalPage(-1);
   if (e.key === 'ArrowRight') modalPage(1);
 });
+
+// 링크나 문자를 복사하면 고객에게 전달한 것으로 보고 상태를 '전달'로 바꾼다
+async function markSent(id = modalId) {
+  try {
+    await api('/api/quotes/' + id, { method: 'PATCH', body: JSON.stringify({ status: 'sent' }) });
+    const row = dashQuotes.find(s => s.id === id);
+    if (row && row.status !== 'sent') { row.status = 'sent'; if (!$('page-dash').hidden) renderDash(); }
+  } catch { /* 상태 표시만 못 바꾼 것이므로 복사는 그대로 둔다 */ }
+}
 
 async function modalSaveImage(btn) {
   btn.disabled = true;

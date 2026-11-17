@@ -8,7 +8,7 @@ const html = (body, status = 200) => new Response(body, { status, headers: { 'co
 export default async (req, context) => {
   const id = context.params.id;
   const rec = QUOTE_ID.test(id) ? await store('quotes').get(id, { type: 'json' }) : null;
-  if (!rec) {
+  if (!rec || rec.status === 'draft') {   // 임시저장(작성중) 견적은 고객에게 열리지 않는다
     return html('<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>견적서를 찾을 수 없습니다</title><body style="font-family:sans-serif;padding:40px"><h1>견적서를 찾을 수 없습니다</h1><p>링크가 잘못되었거나 삭제된 견적입니다. 담당자에게 문의해주세요.</p></body></html>', 404);
   }
   const q = rec.public || rec;   // 내부 정보(state)는 내려보내지 않는다

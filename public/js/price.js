@@ -88,7 +88,7 @@ function removeItem(id) {
   if (!confirm(used ? `이 단품은 세트 ${used}개의 구성에 들어 있습니다. 삭제하면 구성에서도 빠집니다. 삭제할까요?` : '이 단품을 삭제할까요?')) return;
   db.items = db.items.filter(p => p.id !== id);
   db.sets.forEach(s => delete s.comp[id]);
-  delete quote.qty[id]; saveQuote();
+  delete quote.qty[id];
   saveDb(); renderItems(); renderSets();
 }
 

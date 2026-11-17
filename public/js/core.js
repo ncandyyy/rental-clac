@@ -1,7 +1,8 @@
 // 공통: 상태, 서버 통신, 로그인, 화면 전환, 금액 계산
 // (num / won / minus / esc / renderSheet 등은 sheet.js, 기준 데이터는 data.js)
 
-const PW_KEY = 'rental-pw', QUOTE_KEY = 'rental-quote-v4', PAGE_KEY = 'rental-page';
+const PW_KEY = 'rental-pw', PAGE_KEY = 'rental-page';
+localStorage.removeItem('rental-quote-v4');   // 예전 버전이 브라우저에 남겨 둔 작성 중 견적 정리
 let pw = localStorage.getItem(PW_KEY) || '';
 let db = null;          // { items, sets, settings } - 서버에 저장되는 공용 금액표
 const PAGES = {};       // 화면 이름 → 그리는 함수 (각 화면 파일에서 등록)

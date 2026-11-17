@@ -306,6 +306,15 @@ button:not(:disabled):active { transform: scale(.96); }
 .modal .close:hover { background: var(--line); }
 .url-row a:hover { text-decoration: underline; }
 
+.save-row { display: flex; gap: 8px; }
+.save-row .btn-big.light { width: 32%; flex: none; background: var(--fill); color: var(--text); }
+.save-row .btn-big.light:hover { background: var(--line); }
+.badge.green { background: #e3f5ea; color: #137a3a; }
+.draft-list { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; max-height: 60vh; overflow-y: auto; }
+.draft { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; padding: 14px 16px; border-radius: 8px; background: var(--bg); line-height: 1.4; }
+.draft:hover { background: var(--fill); }
+.draft b { font-weight: 700; font-size: 16px; color: var(--text); }
+
 /* 붙여넣기 받을 곳으로 선택된 상태 (색과 안내 문구로만 표시) */
 .dropzone { cursor: pointer; }
 .dropzone:focus { outline: none; background: #e9edf1; }
