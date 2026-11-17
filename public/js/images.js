@@ -1,18 +1,25 @@
 // 이미지 리스트: 단품·세트 이미지 등록 / 변경 / 삭제
+// 등록 방법: 버튼으로 파일 고르기 · 카드에 끌어다 놓기 · 카드에 마우스를 올리고 붙여넣기(Ctrl+V)
+
+let hoverCard = null;   // 붙여넣기를 받을 카드 { kind, id }
 
 PAGES.images = function renderImagesPage() {
+  hoverCard = null;
   const card = (kind, x, name, hint) => `
-    <div class="img-card">
+    <div class="img-card" onmouseenter="hoverCard = { kind: '${kind}', id: ${x.id} }" onmouseleave="hoverCard = null"
+      ${dropAttrs(`uploadFor('${kind}', ${x.id}, imageFiles(event.dataTransfer)[0])`)}>
       <div class="pic" ${bg(x.image)}>${x.image ? '' : hint}</div>
       <b>${esc(name)}</b>
       <div class="row">
-        <button class="btn" onclick="changeImage('${kind}', ${x.id})">${x.image ? '변경' : '등록'}</button>
+        <button class="btn" onclick="uploadFor('${kind}', ${x.id})">${x.image ? '변경' : '등록'}</button>
         ${x.image ? `<button class="btn danger" onclick="setImage('${kind}', ${x.id}, '')">삭제</button>` : ''}
       </div>
     </div>`;
   $('page-images').innerHTML = `
     <div class="page-head">
-      <div><p class="title">이미지 리스트</p><p class="sub" style="margin-top:8px">여기 등록한 사진이 장비 선택 화면과 견적서의 제품 사진에 자동으로 들어갑니다.</p></div>
+      <div><p class="title">이미지 리스트</p>
+        <p class="sub" style="margin-top:8px; line-height:1.6">여기 등록한 사진이 장비 선택 화면과 견적서의 제품 사진에 자동으로 들어갑니다.<br>
+        사진 파일을 카드 위로 끌어다 놓거나, 카드에 마우스를 올린 채 복사한 이미지를 붙여넣기(Ctrl+V)해도 등록됩니다.</p></div>
       <span class="save-state sub"></span>
     </div>
     <p class="title">개별 상품</p>
@@ -28,19 +35,18 @@ function setImage(kind, id, url) {
   const x = (kind === 'item' ? db.items : db.sets).find(v => v.id === id);
   if (!x) return;
   x.image = url;
-  saveDb(); closeModal(); PAGES.images();
+  const top = scrollY;
+  saveDb(); PAGES.images(); scrollTo(0, top);
 }
-// 기본 제공 사진에서 고르거나 새 파일을 올린다
-function changeImage(kind, id) {
-  const x = (kind === 'item' ? db.items : db.sets).find(v => v.id === id);
-  openModal(`
-    <h2 style="font-size:18px">${esc(x.name)}</h2>
-    <p>아래 사진 중에서 고르거나, 새 사진 파일을 올려주세요.</p>
-    <div class="row" style="margin-top:16px"><button class="btn dark" onclick="uploadFor('${kind}', ${id})">내 컴퓨터에서 사진 올리기</button></div>
-    <div class="lib-grid">${LIB.map(l => `
-      <button onclick="setImage('${kind}', ${id}, '${l.url}')" title="${esc(l.name)}"><div ${bg(l.url)}></div><span>${esc(l.name)}</span></button>`).join('')}</div>`, true);
+// file이 없으면 파일 선택 창을 연다
+async function uploadFor(kind, id, file) {
+  if (file === undefined) file = await pickFile();
+  else if (!file) return toast('이미지 파일(PNG·JPG·WEBP)만 넣을 수 있습니다.', true);
+  if (!file) return;
+  try { toast('이미지 올리는 중…'); setImage(kind, id, await uploadImage(file)); toast('이미지를 등록했습니다.'); }
+  catch (e) { if (e.message !== 'unauthorized') toast('이미지 올리기 실패: ' + e.message, true); }
 }
-async function uploadFor(kind, id) {
-  const url = await pickAndUpload();
-  if (url) setImage(kind, id, url);
+function pasteToImageCard(file) {
+  if (!hoverCard) return toast('사진을 넣을 상품 카드 위에 마우스를 올린 뒤 붙여넣어 주세요.', true);
+  uploadFor(hoverCard.kind, hoverCard.id, file);
 }

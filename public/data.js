@@ -55,14 +55,6 @@ const BASE_SETS = [
 // 분류 표시 순서 (여기에 없는 분류는 뒤에 붙는다)
 const CATEGORY_ORDER = ['결제단말기', '프린터기', '포스기', '기타', '키오스크'];
 
-// 기본 제공 이미지 (public/img/lib). 이미지 리스트에서 골라 쓸 수 있다.
-const LIB = [
-  ['front', '프론트'], ['connect', '커넥트'], ['cat', '카드단말기'], ['cat-nc8000', '카드단말기(NC-8000)'], ['terminal', '터미널'],
-  ['printer', '영수증 프린터기'], ['tablet', '태블릿'], ['pos', '포스기'], ['cashbox', '금전함'], ['kiosk', '키오스크'],
-  ...['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '11-beauty', '12', '13', '14', '15', '16', '17', '18', '19']
-    .map(n => ['set-' + n, '세트 ' + n.replace('-beauty', '(뷰티)')]),
-].map(([file, name]) => ({ url: `/img/lib/${file}.webp`, name }));
-
 // 단품 기본 이미지: 단품 id → 파일
 const BASE_ITEM_IMAGES = { 1: 'front', 2: 'connect', 3: 'cat', 4: 'terminal', 5: 'printer', 8: 'tablet', 10: 'pos', 11: 'pos', 12: 'cashbox', 15: 'kiosk', 16: 'kiosk', 17: 'kiosk', 18: 'kiosk' };
 

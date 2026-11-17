@@ -118,12 +118,24 @@ async function uploadImage(file) {
   if (!image.startsWith('data:image/webp')) image = canvas.toDataURL('image/png');   // WEBP 저장을 못 하는 브라우저
   return (await api('/api/images', { method: 'POST', body: JSON.stringify({ image }) })).url;
 }
-async function pickAndUpload() {
-  const file = await pickFile();
-  if (!file) return null;
-  try { toast('이미지 올리는 중…'); const url = await uploadImage(file); toast('이미지를 올렸습니다.'); return url; }
-  catch (e) { if (e.message !== 'unauthorized') toast('이미지 올리기 실패: ' + e.message, true); return null; }
+// 끌어다 놓기·붙여넣기로 들어온 것 중 이미지 파일만 고른다
+const imageFiles = data => [...(data?.files || [])].filter(f => /^image\/(png|jpeg|webp)$/.test(f.type));
+// 끌어다 놓을 수 있는 영역 표시 (onDrop은 이미지 파일 배열을 받는다)
+function dropAttrs(handler) {
+  return `ondragover="event.preventDefault(); this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ` +
+    `ondrop="event.preventDefault(); this.classList.remove('drag'); ${handler}"`;
 }
+// 복사한 이미지 붙여넣기(Ctrl+V): 지금 보고 있는 화면이 받는다
+addEventListener('paste', e => {
+  const files = imageFiles(e.clipboardData);
+  if (!files.length || $('app').hidden) return;
+  const page = localStorage.getItem(PAGE_KEY);
+  if (page === 'quote') { e.preventDefault(); addQuoteFiles(files); }
+  else if (page === 'images') { e.preventDefault(); pasteToImageCard(files[0]); }
+});
+// 영역 밖에 떨어뜨려도 브라우저가 이미지 파일을 열어버리지 않게 한다
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => e.preventDefault());
 
 // ───────── 금액 계산 (엑셀 '세트가' 시트와 같은 식) ─────────
 function calcSet(s) {

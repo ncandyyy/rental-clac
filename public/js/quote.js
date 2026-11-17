@@ -8,7 +8,8 @@ const emptyQuote = () => ({
   editingId: null,                // 저장된 견적을 고치는 중이면 그 id
 });
 let quote = (() => { try { return { ...emptyQuote(), ...JSON.parse(localStorage.getItem(QUOTE_KEY)) }; } catch { return emptyQuote(); } })();
-const folds = { simple: false, detail: false };   // 접힌 영역
+const FOLD_KEY = 'rental-folds';
+const folds = { simple: false, detail: false, photos: false, notes: false, ...JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') };   // 접힌 영역
 
 function saveQuote() { localStorage.setItem(QUOTE_KEY, JSON.stringify(quote)); }
 
@@ -141,11 +142,12 @@ PAGES.quote = function renderQuotePage() {
           <ul id="condList" class="sub" style="margin-top:12px; padding-left:16px; line-height:1.6"></ul>
         </div>
 
-        <div class="card two">
+        <div class="card two" id="foldPhotos" ${dropAttrs('addQuoteFiles(imageFiles(event.dataTransfer))')}>
+          <button class="card-fold" onclick="toggleFold('photos')" aria-label="접기/펴기"><img src="/img/ui/chevron-down.svg" alt="" width="18" height="18"></button>
           <div class="lead">
             <div>
               <p class="title">제품 이미지 등록</p>
-              <p class="sub">자동으로 이미지 리스트에서 상품을 불러옵니다.<br>아래 직접 등록하기로 사진 변경이 가능합니다.</p>
+              <p class="sub">자동으로 이미지 리스트에서 상품을 불러옵니다.<br>사진을 끌어다 놓거나, 복사한 이미지를 붙여넣기(Ctrl+V)해도 추가됩니다.</p>
             </div>
             <div class="row">
               <button class="btn" onclick="addQuoteImage()">직접 등록하기</button>
@@ -155,7 +157,8 @@ PAGES.quote = function renderQuotePage() {
           <div class="panel"><div class="dropzone" id="photoList"></div></div>
         </div>
 
-        <div class="card two">
+        <div class="card two" id="foldNotes">
+          <button class="card-fold" onclick="toggleFold('notes')" aria-label="접기/펴기"><img src="/img/ui/chevron-down.svg" alt="" width="18" height="18"></button>
           <div class="lead">
             <div>
               <p class="title">참고 사항(안내사항)</p>
@@ -177,10 +180,12 @@ PAGES.quote = function renderQuotePage() {
 };
 
 function setInfo(field, value) { quote[field] = value; saveQuote(); renderResult(); }
-function toggleFold(name) { folds[name] = !folds[name]; applyFolds(); }
+function toggleFold(name) { folds[name] = !folds[name]; localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); applyFolds(); }
 function applyFolds() {
   $('foldSimple').classList.toggle('closed', folds.simple);
   $('foldDetail').classList.toggle('closed', folds.detail);
+  $('foldPhotos').classList.toggle('closed', folds.photos);
+  $('foldNotes').classList.toggle('closed', folds.notes);
 }
 
 function step(id, delta) {
@@ -222,11 +227,19 @@ function resetNotes() {
 }
 async function addQuoteImage() {
   const file = await pickFile();
-  if (!file) return;
+  if (file) addQuoteFiles([file]);
+}
+// 파일 선택 · 끌어다 놓기 · 붙여넣기로 들어온 사진을 이 견적에 추가
+async function addQuoteFiles(files) {
+  if (!files.length) return toast('이미지 파일(PNG·JPG·WEBP)만 넣을 수 있습니다.', true);
   try {
     toast('이미지 올리는 중…');
-    quote.imgExtra.push({ url: await uploadImage(file), name: file.name.replace(/\.[^.]+$/, '') });
-    saveQuote(); renderResult(); toast('이미지를 추가했습니다.');
+    for (const file of files) {
+      const name = /^image\.\w+$/.test(file.name) ? '제품 이미지' : file.name.replace(/\.[^.]+$/, '');   // 붙여넣은 이미지는 이름이 없다
+      quote.imgExtra.push({ url: await uploadImage(file), name });
+    }
+    if (folds.photos) toggleFold('photos');
+    saveQuote(); renderResult(); toast(`이미지 ${files.length}장을 추가했습니다.`);
   } catch (e) { if (e.message !== 'unauthorized') toast('이미지 올리기 실패: ' + e.message, true); }
 }
 function removeQuoteImage(url) {
@@ -357,7 +370,12 @@ function showQuoteModal(id, rawQuote, title, sub) {
     <h2>${esc(title)}</h2>
     <p>${esc(sub)}</p>
     <div class="modal-body">
-      <div id="modalSheet" class="sheet-fit">${renderSheet(q)}</div>
+      <div class="pager-wrap">
+        <button class="page-arrow prev" onclick="modalPage(-1)" aria-label="이전 페이지">‹</button>
+        <div id="modalSheet" class="sheet-fit paged">${renderSheet(q)}</div>
+        <button class="page-arrow next" onclick="modalPage(1)" aria-label="다음 페이지">›</button>
+      </div>
+      <p class="page-count sub" id="modalPageCount"></p>
       <div class="modal-actions">
         <button class="btn" onclick="modalSaveImage(this)"><img src="/img/ui/save.svg" alt="">이미지 저장</button>
         <button class="btn" onclick="copyText($('modalMsg').value).then(() => toast('문자 내용을 복사했습니다.'))"><img src="/img/ui/copy.svg" alt="">내용 문자 복사</button>
@@ -369,7 +387,25 @@ function showQuoteModal(id, rawQuote, title, sub) {
     </div>`);
   $('modalMsg').value = fillMessage(q, url);
   fitSheets();
+  modalPageNo = 0; modalPage(0);
 }
+// 견적서가 2장 이상이면 화살표로 한 장씩 넘겨 본다 (이미지 저장·인쇄는 항상 전체)
+let modalPageNo = 0;
+function modalPage(delta) {
+  const pages = [...document.querySelectorAll('#modalSheet .sheet-page')];
+  modalPageNo = Math.max(0, Math.min(pages.length - 1, modalPageNo + delta));
+  pages.forEach((el, i) => el.classList.toggle('cur', i === modalPageNo));
+  const many = pages.length > 1;
+  document.querySelector('.page-arrow.prev').hidden = !many || modalPageNo === 0;
+  document.querySelector('.page-arrow.next').hidden = !many || modalPageNo === pages.length - 1;
+  $('modalPageCount').textContent = many ? `${modalPageNo + 1} / ${pages.length} 페이지` : '';
+}
+addEventListener('keydown', e => {
+  if (!$('modalSheet') || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+  if (e.key === 'ArrowLeft') modalPage(-1);
+  if (e.key === 'ArrowRight') modalPage(1);
+});
+
 async function modalSaveImage(btn) {
   btn.disabled = true;
   try { await saveSheetImage(modalQuote); toast('견적서 이미지를 저장했습니다.'); }
