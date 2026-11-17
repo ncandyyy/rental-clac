@@ -92,7 +92,6 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .side { width: 230px; flex: none; display: flex; flex-direction: column; gap: 24px; margin-top: 9px; position: sticky; top: 20px; }
 .brand { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--card); border-radius: 8px; }
 .brand b { display: block; font-size: 16px; white-space: nowrap; font-weight: 700; }
-#roleBadge { font-style: normal; font-weight: 700; color: var(--text2); }
 .brand span { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .nav { display: flex; flex-direction: column; gap: 8px; }
 .nav button {
@@ -354,6 +353,9 @@ button:not(:disabled):active { transform: scale(.96); }
 .list tr.grp td { background: #f7f9ff; }
 .list tr.grp.grp0 td { background: #faf7ff; }
 .list tr.grp:not(.grp-end) td { border-bottom-color: #e8edf8; }
+
+/* 인사말 */
+.greeting { font-size: 20px; font-weight: 700; color: var(--text); }
 
 /* 붙여넣기 받을 곳으로 선택된 상태 (색과 안내 문구로만 표시) */
 .dropzone { cursor: pointer; }

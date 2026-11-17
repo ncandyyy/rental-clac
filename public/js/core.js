@@ -49,7 +49,6 @@ async function boot() {
   localStorage.setItem(PW_KEY, pw);
   $('login').hidden = true; $('app').hidden = false;
   for (const b of document.querySelectorAll('.nav [data-page]')) b.hidden = role !== 'admin' && ADMIN_PAGES.includes(b.dataset.page);
-  $('roleBadge').textContent = role === 'admin' ? '관리자' : '직원';
   const last = localStorage.getItem(PAGE_KEY);
   showPage(PAGES[last] && (role === 'admin' || !ADMIN_PAGES.includes(last)) ? last : 'quote');
 }
@@ -176,6 +175,10 @@ function calcSet(s) {
 }
 const compText = s => Object.entries(s.comp).map(([id, qty]) =>
   (itemById(id)?.name || '?') + (qty > 1 ? '×' + qty : '')).join(', ') || '(없음)';
+
+// 분류 선택지 (예전에 직접 적은 분류가 있으면 그것도 남겨 둔다)
+const categoryOptions = (value, extra = []) => [...new Set([...extra, ...CATEGORY_ORDER, value].filter(Boolean))]
+  .map(c => `<option ${c === value ? 'selected' : ''}>${esc(c)}</option>`).join('');
 
 // 분류별로 묶은 단품 목록 [[분류, [단품...]], ...]
 function itemsByCategory() {

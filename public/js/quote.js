@@ -59,7 +59,7 @@ function compute(set) {
   for (const p of db.items) {
     const n = (quote.qty[p.id] || 0) - (set && k ? set.comp[p.id] || 0 : 0) * k;
     if (n <= 0) continue;
-    lines.push({ key: 'item:' + p.id, kind: 'item', itemId: p.id, label: p.category === '포스 프로그램' ? '포스 프로그램' : '추가 장비',
+    lines.push({ key: 'item:' + p.id, kind: 'item', itemId: p.id, label: p.category || '기타',
       name: p.name, qty: n, unit: p.price, uom: p.unit || '대', list: p.price * n, setDisc: 0, eventDisc: (p.price - p.sale) * n, final: p.sale * n });
     addImage(p.image, p.name);
   }
@@ -99,6 +99,7 @@ function snapshot(rcp = quote.recipients[0]) {
 PAGES.quote = function renderQuotePage() {
   $('page-quote').innerHTML = `
     <div class="basic">
+      <p class="greeting">${role === 'admin' ? '관리자' : '직원'}님, 반갑습니다.</p>
       <div class="row between">
         <p class="title">기본 정보 입력</p>
         <div class="row">
@@ -288,7 +289,7 @@ function renderResult() {
     if (l.kind === 'manual') {
       const m = quote.manual.find(x => x.key === l.key);
       return `<tr class="manual" data-key="${k}">${move}
-        <td><input class="cell" value="${esc(m.label)}" placeholder="항목" oninput="editManual('${k}', 'label', this)"></td>
+        <td><select class="cell" onchange="editManual('${k}', 'label', this)">${m.label ? '' : '<option value="" selected>선택</option>'}${categoryOptions(m.label)}</select></td>
         <td><input class="cell" value="${esc(m.name)}" placeholder="설명" oninput="editManual('${k}', 'name', this)"></td>
         <td><input class="cell num" type="number" min="0" value="${m.unit || ''}" placeholder="0" oninput="editManual('${k}', 'unit', this)"></td>
         <td>${qtyCell(l, `setManualQty.bind(null, '${k}')`)}</td>
@@ -375,7 +376,7 @@ function editManual(key, field, el) {
 }
 function addManual() {
   const key = 'm' + Date.now().toString(36);
-  quote.manual.push({ key, label: '', name: '', unit: 0, qty: 1, uom: '개', amount: 0 });
+  quote.manual.push({ key, label: '기타', name: '', unit: 0, qty: 1, uom: '개', amount: 0 });
   renderResult();
   document.querySelector(`#lineBody tr[data-key="${key}"] input`)?.focus();
 }

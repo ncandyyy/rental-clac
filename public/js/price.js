@@ -21,7 +21,6 @@ PAGES.price = function renderPricePage() {
         <thead><tr><th></th><th>품목</th><th>분류</th><th class="num">정상가</th><th class="num">행사가</th><th class="num">행사 할인</th><th>확정 필요</th><th>비고</th><th></th></tr></thead>
         <tbody id="itemBody"></tbody>
       </table>
-      <datalist id="catList"></datalist>
     </div>
 
     <div class="section">
@@ -56,12 +55,11 @@ PAGES.price = function renderPricePage() {
 
 // ───────── 단품가 ─────────
 function renderItems() {
-  $('catList').innerHTML = [...new Set([...CATEGORY_ORDER, ...db.items.map(p => p.category)])].map(c => `<option value="${esc(c)}">`).join('');
   $('itemBody').innerHTML = itemsByCategory().flatMap(([, items]) => items).map(p => `
     <tr id="item-${p.id}" class="${p.tbd ? 'tbd' : ''}">
       <td><div class="thumb ${p.image ? 'has' : ''}" style="width:32px; height:32px" ${bg(p.image)}></div></td>
       <td><input class="input" style="min-width:200px" value="${esc(p.name)}" oninput="editItem(${p.id}, 'name', this)"></td>
-      <td><input class="input" style="width:100px" list="catList" value="${esc(p.category)}" oninput="editItem(${p.id}, 'category', this)" onchange="renderItems()"></td>
+      <td><select class="input" style="width:130px" onchange="editItem(${p.id}, 'category', this); renderItems()">${categoryOptions(p.category)}</select></td>
       <td class="num"><input class="input num" type="number" min="0" step="1000" value="${p.price}" oninput="editItem(${p.id}, 'price', this)"></td>
       <td class="num"><input class="input num" type="number" min="0" step="1000" value="${p.sale}" oninput="editItem(${p.id}, 'sale', this)"></td>
       <td class="num calc" id="item-disc-${p.id}">${won(p.price - p.sale)}</td>
