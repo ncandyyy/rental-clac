@@ -45,6 +45,16 @@ function dashMatches() {
 }
 
 const groupSize = g => dashQuotes.filter(x => x.groupId === g).length;
+// 같은 묶음 견적은 처음 나온 자리에 모아서 붙인다
+function groupTogether(list) {
+  const out = [], placed = new Set();
+  for (const s of list) {
+    if (placed.has(s)) continue;
+    const members = s.groupId ? list.filter(x => x.groupId === s.groupId).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))) : [s];
+    for (const m of members) { out.push(m); placed.add(m); }
+  }
+  return out;
+}
 
 function renderDash() {
   const matched = dashMatches();
@@ -65,16 +75,25 @@ function renderDash() {
   const count = k => matched.filter(s => !k || statusOf(s) === k).length;
   $('dashTabs').innerHTML = [['', '전체'], ['draft', '작성중'], ['done', '작성완료'], ['sent', '전달']].map(([k, label]) =>
     `<button class="${dashFilter.status === k ? 'on' : ''}" onclick="setDash('status', '${k}')">${label} ${count(k)}</button>`).join('');
-  const rows = matched.filter(s => (!dashFilter.staff || (s.staff || COMPANY.name) === dashFilter.staff) && (!dashFilter.status || statusOf(s) === dashFilter.status));
+  const rows = groupTogether(matched.filter(s => (!dashFilter.staff || (s.staff || COMPANY.name) === dashFilter.staff) && (!dashFilter.status || statusOf(s) === dashFilter.status)));
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   dashFilter.page = Math.min(dashFilter.page, pages);
   const shown = rows.slice((dashFilter.page - 1) * PER_PAGE, dashFilter.page * PER_PAGE);
-  $('dashBody').innerHTML = shown.map(s => `
-    <tr>
+  // 묶음 견적은 왼쪽 띠로 이어서 보여준다 (붙어 있는 묶음끼리는 색을 번갈아)
+  let band = 0;
+  const bandOf = shown.map((s, i) => {
+    const grouped = s.groupId && groupSize(s.groupId) > 1;
+    if (!grouped) return null;
+    const prev = shown[i - 1], next = shown[i + 1];
+    const startsGroup = prev?.groupId !== s.groupId;
+    if (startsGroup) band++;
+    return `grp grp${band % 2}${startsGroup ? ' grp-start' : ''}${next?.groupId !== s.groupId ? ' grp-end' : ''}`;
+  });
+  $('dashBody').innerHTML = shown.map((s, i) => `
+    <tr class="${bandOf[i] || ''}">
       <td><span class="badge ${STATUS[statusOf(s)][1]}">${STATUS[statusOf(s)][0]}</span></td>
       <td>${esc(s.date)}</td>
-      <td><b>${esc(s.customer || s.name || '(이름 없음)')}</b>${s.customer && s.name ? `<small class="sub" style="display:block">${esc(s.name)}</small>` : ''}
-        ${s.groupId && groupSize(s.groupId) > 1 ? `<span class="badge" title="여러 수신자로 함께 만든 견적">묶음 ${groupSize(s.groupId)}건</span>` : ''}</td>
+      <td><b>${esc(s.customer || s.name || '(이름 없음)')}</b>${s.customer && s.name ? `<small class="sub" style="display:block">${esc(s.name)}</small>` : ''}</td>
       <td>${esc(s.phone)}</td>
       <td>${esc(s.staff || COMPANY.name)}</td>
       <td>${esc(s.items)}</td>
@@ -93,15 +112,21 @@ function renderDash() {
     <button class="btn" ${dashFilter.page >= pages ? 'disabled' : ''} onclick="dashFilter.page++; renderDash()">다음</button>`;
 }
 
+// 묶음 견적이면 같은 묶음을 함께 띄우고 누른 견적의 탭을 연다
 async function viewQuote(id) {
   try {
-    const { quote: q } = await api('/api/quotes/' + id);
-    showQuoteModal([{ id, q }], `${whoLabel(q) || '고객'} 견적서`, `${q.date} · 담당자 ${q.staff || COMPANY.name}`);
+    const s = dashQuotes.find(x => x.id === id);
+    const ids = s?.groupId ? groupTogether(dashQuotes).filter(x => x.groupId === s.groupId && statusOf(x) !== 'draft').map(x => x.id) : [id];
+    const list = await Promise.all(ids.map(async x => ({ id: x, q: (await api('/api/quotes/' + x)).quote })));
+    const { q } = list.find(x => x.id === id);
+    showQuoteModal(list, list.length > 1 ? `묶음 견적서 ${list.length}건` : `${whoLabel(q) || '고객'} 견적서`, `${q.date} · 담당자 ${q.staff || COMPANY.name}`, ids.indexOf(id));
   } catch (e) { if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message, true); }
 }
 async function deleteQuote(id) {
   const s = dashQuotes.find(x => x.id === id);
-  if (!confirm(`${s ? whoLabel(s) || '이' : '이'} 견적을 삭제할까요?${s && statusOf(s) !== 'draft' ? ' 고객에게 보낸 링크도 더 이상 열리지 않습니다.' : ''}`)) return;
+  if (s?.groupId && groupSize(s.groupId) > 1) {
+    if (!confirm('묶음 견적서 입니다. 하나를 삭제하시겠습니까?')) return;
+  } else if (!confirm(`${s ? whoLabel(s) || '이' : '이'} 견적을 삭제할까요?${s && statusOf(s) !== 'draft' ? ' 고객에게 보낸 링크도 더 이상 열리지 않습니다.' : ''}`)) return;
   try {
     await api('/api/quotes/' + id, { method: 'DELETE' });
     dashQuotes = dashQuotes.filter(x => x.id !== id);

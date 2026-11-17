@@ -564,17 +564,36 @@ async function openDrafts() {
     </div>`, true);
 }
 
+// 문자에 들어가는 담당자 이름 (비워 두면 '페이앤밴 담당자 드림'이 되도록)
+const staffName = q => q.staff && q.staff !== COMPANY.name ? q.staff : '담당자';
 // 문자 내용: 기본 문구의 {칸}을 견적 내용으로 채운다
 function fillMessage(q, url) {
   const items = q.lines.map(l => l.name + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ');
-  const values = { 고객명: whoOf(q), 상호: q.customer || '', 성함: q.name || '', 상품구성: items, 월렌탈료: num(q.final), 담당자: q.staff || COMPANY.name, 링크: url };
+  const values = { 고객명: whoOf(q), 상호: q.customer || '', 성함: q.name || '', 상품구성: items, 월렌탈료: num(q.final), 담당자: staffName(q), 링크: url };
   return (db.settings.message || '').replace(/\{(고객명|상호|성함|상품구성|월렌탈료|담당자|링크)\}/g, (_, k) => values[k]);
 }
 
 // 완료·보기 모달. list = [{ id, q }] (여러 수신자로 만든 묶음이면 탭으로 넘겨 본다)
+// 묶음 문자: 견적마다 달라지는 줄({상품구성} {월렌탈료} {링크}가 든 줄)을 견적 수만큼 반복한다
+function fillGroupMessage(list) {
+  const tpl = (db.settings.message || '').split('\n');
+  const perQuote = /\{(상품구성|월렌탈료|링크|상호)\}/;
+  const idx = tpl.map((l, i) => perQuote.test(l) ? i : -1).filter(i => i >= 0);
+  const fillOne = (text, x) => {
+    const items = x.q.lines.map(l => l.name + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ');
+    const v = { 고객명: whoOf(x.q), 상호: x.q.customer || '', 성함: x.q.name || '', 상품구성: items, 월렌탈료: num(x.q.final), 담당자: staffName(x.q), 링크: modalUrl(x.id) };
+    return text.replace(/\{(고객명|상호|성함|상품구성|월렌탈료|담당자|링크)\}/g, (_, k) => v[k]);
+  };
+  if (!idx.length) return fillOne(tpl.join('\n'), list[0]) + '\n\n' + list.map(x => `[${whoLabel(x.q) || '견적서'}] ${modalUrl(x.id)}`).join('\n');
+  const a = idx[0], b = idx[idx.length - 1];
+  const block = tpl.slice(a, b + 1).join('\n');
+  const blocks = list.map(x => `[${x.q.customer || x.q.name || '견적서'}]\n` + fillOne(block, x)).join('\n\n');
+  return [fillOne(tpl.slice(0, a).join('\n'), list[0]), blocks, fillOne(tpl.slice(b + 1).join('\n'), list[0])].join('\n');
+}
+
 let modalList = [], modalIdx = 0;
 const modalUrl = id => `${location.origin}/q/${id}`;
-function showQuoteModal(list, title, sub) {
+function showQuoteModal(list, title, sub, start = 0) {
   modalList = list.map(x => ({ id: x.id, q: normalizeQuote(x.q) }));
   modalIdx = 0;
   const many = modalList.length > 1;
@@ -591,7 +610,7 @@ function showQuoteModal(list, title, sub) {
       <p class="page-count sub" id="modalPageCount"></p>
       <div class="modal-actions">
         <button class="btn" onclick="modalSaveImage(this)"><img src="/img/ui/save.svg" alt="">이미지 저장</button>
-        <button class="btn" onclick="copyText($('modalMsg').value).then(() => { toast('문자 내용을 복사했습니다.'); markSent(); })"><img src="/img/ui/copy.svg" alt="">내용 문자 복사</button>
+        <button class="btn" onclick="copyText($('modalMsg').value).then(async () => { toast('문자 내용을 복사했습니다.'); for (const { id } of modalList) await markSent(id); })"><img src="/img/ui/copy.svg" alt="">내용 문자 복사</button>
         <button class="btn" onclick="copyText(modalUrl(modalList[modalIdx].id)).then(() => { toast('링크를 복사했습니다. 카톡·톡톡에 붙여넣으면 미리보기가 함께 나갑니다.'); markSent(); })"><img src="/img/ui/link.svg" alt="">URL 공유(카카오톡,톡톡 공유용)</button>
         ${many ? `<button class="btn" onclick="copyAllLinks()"><img src="/img/ui/link.svg" alt="">전체 링크 한번에 복사</button>` : ''}
         <button class="btn" onclick="window.print()">인쇄 / PDF</button>
@@ -599,7 +618,9 @@ function showQuoteModal(list, title, sub) {
       <textarea class="msg-edit" id="modalMsg" spellcheck="false"></textarea>
       <div class="url-row"><span>URL 링크 |</span><a id="modalUrl" target="_blank" rel="noopener"></a></div>
     </div>`);
-  showModalQuote(0);
+  // 문자 내용은 묶음 전체를 한 번에 담는다 (탭을 바꿔도 고친 문자는 그대로)
+  $('modalMsg').value = many ? fillGroupMessage(modalList) : fillMessage(modalList[0].q, modalUrl(modalList[0].id));
+  showModalQuote(start);
 }
 function showModalQuote(i) {
   modalIdx = i;
@@ -610,7 +631,6 @@ function showModalQuote(i) {
   layoutSheets($('modalSheet'));
   fitSheets();
   modalPageNo = 0; modalPage(0);
-  $('modalMsg').value = fillMessage(q, modalUrl(id));
   $('modalUrl').href = $('modalUrl').textContent = modalUrl(id);
 }
 async function copyAllLinks() {

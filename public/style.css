@@ -348,6 +348,13 @@ button:not(:disabled):active { transform: scale(.96); }
 .qstep input { width: 46px; height: 32px; text-align: center; border: 1px solid transparent; border-radius: 4px; background: #fff; font-weight: 700; }
 .modal-tabs { justify-content: center; margin-bottom: 14px; }
 
+/* 대시보드: 묶음 견적 띠 */
+.list tr.grp td:first-child { box-shadow: inset 5px 0 0 #3182f6; padding-left: 16px; }
+.list tr.grp.grp0 td:first-child { box-shadow: inset 5px 0 0 #8b5cf6; }
+.list tr.grp td { background: #f7f9ff; }
+.list tr.grp.grp0 td { background: #faf7ff; }
+.list tr.grp:not(.grp-end) td { border-bottom-color: #e8edf8; }
+
 /* 붙여넣기 받을 곳으로 선택된 상태 (색과 안내 문구로만 표시) */
 .dropzone { cursor: pointer; }
 .dropzone:focus { outline: none; background: #e9edf1; }
