@@ -269,6 +269,40 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .img-card .row { gap: 4px; }
 .img-card .btn { padding: 8px 14px; min-height: 36px; flex: 1; }
 
+/* ── 누르거나 선택했을 때 반응 ── */
+button, .chip, .pick, .setpick label, .stat, .img-card, .nav button, .input, .field input, textarea { transition: background-color .12s, border-color .12s, box-shadow .12s, transform .06s, color .12s; }
+button:not(:disabled):active { transform: scale(.96); }
+:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.input:focus, .field input:focus, .field select:focus, textarea:focus, .notes-edit:focus, .msg-edit:focus, .settings textarea:focus {
+  border-color: var(--text); box-shadow: 0 0 0 3px rgba(51, 61, 75, .12); outline: none;
+}
+.nav button:hover { color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.nav button.on { color: var(--brand); box-shadow: inset 0 0 0 1.5px var(--brand); }
+.nav button.plain:hover { box-shadow: none; text-decoration: underline; }
+.chips button.chip:hover { background: var(--line); }
+.chips button.chip.on:hover { background: #222a35; }
+.pick { border: 1.5px solid transparent; }
+.pick:hover { border-color: var(--line); }
+.pick.sel { border-color: var(--text); background: #f6f8fa; }
+.pick.sel .stepper { background: var(--card); }
+.stepper button { border-radius: 4px; }
+.stepper button:not(:disabled):hover img { filter: brightness(.9); }
+.setpick label { padding: 8px 10px; border-radius: 6px; border: 1.5px solid transparent; }
+.setpick label:hover { background: var(--bg); }
+.setpick label.sel { border-color: var(--text); background: var(--bg); }
+.tabs button:hover { color: var(--text); background: var(--line); }
+.tabs button.on:hover { color: var(--bg); background: var(--text); }
+.stat:hover { border-color: var(--hint); }
+.stat.on { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+.list tbody tr:not(.detail):hover td { background: #f8f9fa; }
+.list tbody tr.tbd:hover td { background: #fff6d6; }
+.img-card { border: 1.5px solid transparent; }
+.img-card:hover { border-color: var(--text); }
+.fold-head:hover { color: var(--text); }
+.photo button:hover { background: var(--brand); }
+.modal .close:hover { background: var(--line); }
+.url-row a:hover { text-decoration: underline; }
+
 /* ── 견적서 양식 (A4 595×842 기준) ── */
 .sheet-pages { display: flex; flex-direction: column; gap: 12px; width: 595px; }
 .sheet-page {

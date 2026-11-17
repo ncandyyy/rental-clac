@@ -267,7 +267,7 @@ function renderPicks() {
     ${items.map(p => {
       const n = quote.qty[p.id] || 0;
       return `
-      <div class="pick">
+      <div class="pick ${n ? 'sel' : ''}">
         <div class="info">
           <div class="thumb ${p.image ? 'has' : ''}" ${bg(p.image)}></div>
           <div><b>${esc(p.name)}</b><span>정상가 ${won(p.price)}${p.sale !== p.price ? ` · 행사가 ${won(p.sale)}` : ''}</span></div>
@@ -291,7 +291,7 @@ function renderResult() {
   const r = compute(set);
 
   const opt = (value, checked, label) =>
-    `<label><input type="radio" name="setChoice" ${checked ? 'checked' : ''} onchange="chooseSet('${value}')"><span>${label}</span></label>`;
+    `<label class="${checked ? 'sel' : ''}"><input type="radio" name="setChoice" ${checked ? 'checked' : ''} onchange="chooseSet('${value}')"><span>${label}</span></label>`;
   $('setPick').innerHTML = !cands.length ? '' : `
     <div class="setpick">
       <span class="sub">적용 세트 — 같은 구성에 세트가 여러 개면 직접 고를 수 있습니다.</span>
