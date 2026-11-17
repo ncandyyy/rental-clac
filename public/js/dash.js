@@ -107,7 +107,7 @@ function renderDash() {
         ${statusOf(s) === 'draft' ? `<button class="btn dark" onclick="loadQuote('${s.id}')">이어서 작성</button>` : `
         <button class="btn" onclick="viewQuote('${s.id}')">보기</button>
         <button class="btn" onclick="copyText(location.origin + '/q/${s.id}').then(() => { toast('링크를 복사했습니다.'); markSent('${s.id}'); })">링크</button>
-        <button class="btn" onclick="loadQuote('${s.id}')">수정</button>`}
+        <button class="btn" onclick="editFromDash('${s.id}')">수정</button>`}
         <button class="btn danger" onclick="deleteQuote('${s.id}')">삭제</button>
       </td>
     </tr>`).join('') || `<tr><td colspan="8" class="sub" style="padding:32px 8px; text-align:center">${dashQuotes.length ? '조건에 맞는 견적이 없습니다.' : '저장된 견적이 없습니다. 견적서 관리에서 견적을 저장하면 여기에 쌓입니다.'}</td></tr>`;
@@ -126,6 +126,22 @@ async function viewQuote(id) {
     const { q } = list.find(x => x.id === id);
     showQuoteModal(list, list.length > 1 ? `묶음 견적서 ${list.length}건` : `${whoLabel(q) || '고객'} 견적서`, `${q.date} · 담당자 ${q.staff || COMPANY.name}`, ids.indexOf(id));
   } catch (e) { if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message, true); }
+}
+// 묶음 견적의 수정: 묶음 전체를 같이 고칠지, 이 견적만 사본으로 따로 고칠지 묻는다
+function editFromDash(id) {
+  const s = dashQuotes.find(x => x.id === id);
+  const size = s?.groupId ? groupTogether(dashQuotes).filter(x => x.groupId === s.groupId && statusOf(x) !== 'draft').length : 1;
+  if (size < 2) return loadQuote(id);
+  openModal(`
+    <h2 style="font-size:20px">묶음 견적서입니다</h2>
+    <p>이 견적서는 ${size}건이 한 묶음입니다. 어떻게 수정할까요?</p>
+    <div class="choice-list">
+      <button class="choice" onclick="loadGroup('${id}', '${esc(s.groupId)}')">
+        <b>묶음 전체 일괄 수정</b><span class="sub">${size}건을 함께 고치고, 각 견적서의 원래 링크에 덮어씁니다.</span></button>
+      <button class="choice" onclick="loadQuote('${id}', 'copy')">
+        <b>이 견적만 따로 수정</b><span class="sub">묶음에서 빠진 사본으로 따로 저장됩니다. 원래 묶음 견적서는 그대로 남습니다.</span></button>
+    </div>
+    <div class="row" style="justify-content:flex-end; margin-top:16px"><button class="btn" onclick="closeModal()">취소</button></div>`, true);
 }
 async function deleteQuote(id) {
   const s = dashQuotes.find(x => x.id === id);

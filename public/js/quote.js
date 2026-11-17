@@ -12,6 +12,7 @@ const emptyQuote = () => ({
   editingId: null,                // 저장된(또는 임시저장한) 견적을 이어서 쓰는 중이면 그 id
   editingStatus: null,            // 그 견적의 상태: draft / done / sent
   groupId: null,                  // 여러 수신자로 함께 만든 견적 묶음
+  groupMembers: [],               // 묶음 일괄 수정 중이면 처음 불러온 묶음 견적 id 목록
 });
 // 작성 중인 견적은 이 브라우저에 남기지 않는다. 새로고침하면 빈 화면이고, 이어서 쓰려면 임시저장한다.
 let quote = emptyQuote();
@@ -339,9 +340,12 @@ function renderTotals(r = current()) {
   $('imgReset').hidden = !quote.imgRemoved.length && !quote.imgExtra.length;
   $('notesReset').hidden = !quote.notes;
   applyFolds();
-  $('editBanner').innerHTML = !quote.editingId ? '' : quote.editingStatus === 'draft'
-    ? '<span class="badge yellow">임시저장한 견적을 이어서 작성 중</span>'
-    : '<span class="badge yellow">저장된 견적 수정 중 · 저장하면 같은 링크에 덮어씁니다</span>';
+  const banner = {
+    draft: '임시저장한 견적을 이어서 작성 중',
+    group: `묶음 견적서 ${quote.groupMembers.length}건 일괄 수정 중 · 저장하면 같은 링크에 덮어씁니다`,
+    copy: '묶음에서 뺀 사본 작성 중 · 저장하면 새 견적서로 저장됩니다',
+  }[quote.editingStatus] || (quote.editingId ? '저장된 견적 수정 중 · 저장하면 같은 링크에 덮어씁니다' : '');
+  $('editBanner').innerHTML = banner ? `<span class="badge yellow">${esc(banner)}</span>` : '';
 }
 
 // 세트 줄 수량: 세트 구성 장비를 세트 수만큼 늘리거나 줄인다
@@ -487,8 +491,8 @@ function resetQuoteImages() { quote.imgRemoved = []; quote.imgExtra = []; render
 
 // ───────── 임시저장 / 저장 / 완료 모달 ─────────
 const stateOf = recipients => {
-  const { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra, manual, order, groupId } = quote;
-  return { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra, manual, order, groupId, recipients };
+  const { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra, manual, order, groupId, groupMembers } = quote;
+  return { qty, setChoice, special, specialMemo, months, notes, imgRemoved, imgExtra, manual, order, groupId, groupMembers, recipients };
 };
 const hasWho = r => r.customer.trim() || r.name.trim();
 
@@ -503,25 +507,36 @@ async function saveQuoteToServer(asDraft) {
   if (!asDraft && recips.some(r => !hasWho(r)) && !confirm('상호나 고객 성함이 비어 있는 수신자가 있습니다. 그대로 저장할까요?')) return;
   for (const b of [$('saveBtn'), $('draftBtn')]) b.disabled = true;
   try {
-    const wasDone = quote.editingId && quote.editingStatus !== 'draft';
+    const wasDone = ['done', 'sent', 'group'].includes(quote.editingStatus);
     if (asDraft) {
+      // 임시저장은 임시저장 견적에만 덮어쓴다. 저장된 견적을 고치다 임시저장하면 따로 임시저장본을 만든다(고객 링크는 그대로).
       const body = JSON.stringify({ quote: first, status: 'draft', state: stateOf(recips), groupId: quote.groupId });
-      if (quote.editingId) await api('/api/quotes/' + quote.editingId, { method: 'PUT', body });
+      if (quote.editingStatus === 'draft') await api('/api/quotes/' + quote.editingId, { method: 'PUT', body });
       else await api('/api/quotes', { method: 'POST', body });
     } else {
-      if (recips.length > 1 && !quote.groupId) quote.groupId = 'g' + Math.random().toString(36).slice(2, 12);
+      quote.groupId = recips.length > 1 ? quote.groupId || 'g' + Math.random().toString(36).slice(2, 12) : null;
+      let draftSlot = quote.editingStatus === 'draft' ? quote.editingId : null;   // 이어 쓰던 임시저장본은 첫 새 견적 자리로 쓴다
       const saved = [];
-      for (const [i, r] of recips.entries()) {
+      for (const r of recips) {
+        const target = r.id || draftSlot;
+        if (!r.id) draftSlot = null;
         const q = snapshot(r);
         const image = await htmlToPng(renderOgCard(q), 1);
-        const body = JSON.stringify({ quote: q, image, status: 'done', state: stateOf([r]), groupId: quote.groupId });
-        const { id } = i === 0 && quote.editingId
-          ? await api('/api/quotes/' + quote.editingId, { method: 'PUT', body })
+        const body = JSON.stringify({ quote: q, image, status: 'done', state: stateOf([{ ...r, id: undefined }]), groupId: quote.groupId });
+        const { id } = target
+          ? await api('/api/quotes/' + target, { method: 'PUT', body })
           : await api('/api/quotes', { method: 'POST', body });
         saved.push({ id, q });
       }
-      showQuoteModal(saved, saved.length > 1 ? `견적서 ${saved.length}건 생성이 완료 되었습니다!` : wasDone ? '견적서가 수정 되었습니다!' : '견적서 생성이 완료 되었습니다!',
-        saved.length > 1 ? '수신자별로 따로 저장되었습니다. 대시보드에서 하나씩 수정할 수 있습니다.' : '저장된 견적서는 대시보드에서 확인할 수 있습니다.');
+      if (draftSlot) await api('/api/quotes/' + draftSlot, { method: 'DELETE' });   // 쓰이지 않은 임시저장본 정리
+      // 일괄 수정 중에 뺀 수신자의 견적서는 지우지 않고 묶음에서만 뺀다
+      for (const id of quote.groupMembers.filter(m => !saved.some(x => x.id === m))) {
+        await api('/api/quotes/' + id, { method: 'PATCH', body: JSON.stringify({ groupId: null }) });
+      }
+      const n = saved.length;
+      showQuoteModal(saved,
+        wasDone ? (n > 1 ? `묶음 견적서 ${n}건이 수정 되었습니다!` : '견적서가 수정 되었습니다!') : (n > 1 ? `견적서 ${n}건 생성이 완료 되었습니다!` : '견적서 생성이 완료 되었습니다!'),
+        n > 1 ? '수신자별로 따로 저장되었습니다. 대시보드에서 확인할 수 있습니다.' : '저장된 견적서는 대시보드에서 확인할 수 있습니다.');
     }
     quote = emptyQuote();
     PAGES.quote();
@@ -534,16 +549,39 @@ async function saveQuoteToServer(asDraft) {
 }
 
 // 저장된 견적(임시저장 포함)을 불러와 이어서 쓴다. 저장하면 같은 견적에 덮어쓴다.
-async function loadQuote(id) {
+// mode 'copy': 묶음에서 하나만 고칠 때. 원래 견적은 그대로 두고, 저장하면 묶음 없는 새 견적(사본)으로 저장된다.
+async function loadQuote(id, mode) {
   try {
     const { quote: q, state, status } = await api('/api/quotes/' + id);
     if (!state) return toast('이 견적은 예전 방식으로 저장되어 수정할 수 없습니다. 보기만 가능합니다.', true);
     const recipients = status === 'draft' && state.recipients?.length
       ? state.recipients.map(r => ({ ...emptyRecipient(), ...r }))
-      : [{ customer: q.customer || '', name: q.name || '', phone: q.phone || '' }];
+      : [{ customer: q.customer || '', name: q.name || '', phone: q.phone || '', id }];
     quote = { ...emptyQuote(), ...state, recipients, date: q.date || today(), staff: q.staff === COMPANY.name ? '' : q.staff, editingId: id, editingStatus: status };
+    if (status !== 'draft') quote.groupMembers = [];
+    if (mode === 'copy') {
+      Object.assign(quote, { editingId: null, editingStatus: 'copy', groupId: null, groupMembers: [] });
+      quote.recipients.forEach(r => delete r.id);
+    }
     closeModal(); showPage('quote');
-    toast('견적을 불러왔습니다. 금액은 현재 금액표 기준으로 다시 계산됩니다.');
+    toast(mode === 'copy' ? '묶음에서 뺀 사본으로 불러왔습니다. 저장하면 새 견적서로 저장됩니다.' : '견적을 불러왔습니다. 금액은 현재 금액표 기준으로 다시 계산됩니다.');
+  } catch (e) { if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message, true); }
+}
+// 묶음 일괄 수정: 누른 견적의 내용으로 묶음 전체를 불러온다 (수신자마다 원래 링크에 덮어쓴다)
+async function loadGroup(id, groupId) {
+  try {
+    const members = groupTogether(dashQuotes).filter(x => x.groupId === groupId && statusOf(x) !== 'draft');
+    const loaded = await Promise.all(members.map(m => api('/api/quotes/' + m.id)));
+    const clicked = loaded[members.findIndex(m => m.id === id)];
+    if (!clicked?.state) return toast('이 견적은 예전 방식으로 저장되어 수정할 수 없습니다.', true);
+    quote = {
+      ...emptyQuote(), ...clicked.state,
+      recipients: loaded.map((x, i) => ({ customer: x.quote.customer || '', name: x.quote.name || '', phone: x.quote.phone || '', id: members[i].id })),
+      date: clicked.quote.date || today(), staff: clicked.quote.staff === COMPANY.name ? '' : clicked.quote.staff,
+      editingId: id, editingStatus: 'group', groupId, groupMembers: members.map(m => m.id),
+    };
+    closeModal(); showPage('quote');
+    toast(`묶음 견적서 ${members.length}건을 불러왔습니다. 저장하면 모두 함께 수정됩니다.`);
   } catch (e) { if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message, true); }
 }
 const whoLabel = s => [s.customer, s.name].filter(Boolean).join(' · ');

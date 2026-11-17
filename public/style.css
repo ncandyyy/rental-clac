@@ -314,6 +314,10 @@ button:not(:disabled):active { transform: scale(.96); }
 .save-row .btn-big.light { width: 32%; flex: none; background: var(--fill); color: var(--text); }
 .save-row .btn-big.light:hover { background: var(--line); }
 .badge.green { background: #e3f5ea; color: #137a3a; }
+.choice-list { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+.choice { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; padding: 16px 18px; border-radius: 10px; background: var(--bg); line-height: 1.45; }
+.choice:hover { background: var(--fill); }
+.choice b { font-size: 16px; font-weight: 700; color: var(--text); }
 .draft-list { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; max-height: 60vh; overflow-y: auto; }
 .draft { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; padding: 14px 16px; border-radius: 8px; background: var(--bg); line-height: 1.4; }
 .draft:hover { background: var(--fill); }

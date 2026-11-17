@@ -69,6 +69,13 @@ export default async (req, context) => {
     // 상태만 바꾸기 (링크·문자를 복사하면 '전달')
     if (req.method === 'PATCH') {
       const body = await req.json().catch(() => null);
+      if (body && 'groupId' in body && body.groupId === null) {   // 묶음에서 빼기
+        const rec = await quotes.get(id, { type: 'json' });
+        if (!rec) return json({ error: '견적을 찾을 수 없습니다.' }, 404);
+        await quotes.setJSON(id, { ...rec, groupId: null });
+        await updateIndex(list => list.map(s => s.id === id ? { ...s, groupId: undefined } : s));
+        return json({ ok: true });
+      }
       if (body?.status !== 'sent') return json({ error: '잘못된 요청입니다.' }, 400);
       const rec = await quotes.get(id, { type: 'json' });
       if (!rec || rec.status === 'draft') return json({ error: '견적을 찾을 수 없습니다.' }, 404);
