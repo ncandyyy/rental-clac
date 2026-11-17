@@ -99,7 +99,7 @@ PAGES.quote = function renderQuotePage() {
       <div class="col-left">
         <div class="row between">
           <p class="title">장비 선택</p>
-          <select class="input" style="width:230px" onchange="loadSet(this.value); this.value=''" id="setLoader"></select>
+          <select class="input" style="width:250px" onchange="loadSet(this.value); this.value=''" id="setLoader"></select>
         </div>
         <div class="fold" id="foldSimple">
           <button class="fold-head" onclick="toggleFold('simple')">세트 구성 간단 작성 <img src="/img/ui/chevron-down.svg" alt="" width="14" height="14"></button>
@@ -357,7 +357,7 @@ function showQuoteModal(id, rawQuote, title, sub) {
     <h2>${esc(title)}</h2>
     <p>${esc(sub)}</p>
     <div class="modal-body">
-      <div id="modalSheet">${renderSheet(q)}</div>
+      <div id="modalSheet" class="sheet-fit">${renderSheet(q)}</div>
       <div class="modal-actions">
         <button class="btn" onclick="modalSaveImage(this)"><img src="/img/ui/save.svg" alt="">이미지 저장</button>
         <button class="btn" onclick="copyText($('modalMsg').value).then(() => toast('문자 내용을 복사했습니다.'))"><img src="/img/ui/copy.svg" alt="">내용 문자 복사</button>
@@ -368,6 +368,7 @@ function showQuoteModal(id, rawQuote, title, sub) {
       <div class="url-row"><span>URL 링크 |</span><a href="${url}" target="_blank" rel="noopener">${url}</a></div>
     </div>`);
   $('modalMsg').value = fillMessage(q, url);
+  fitSheets();
 }
 async function modalSaveImage(btn) {
   btn.disabled = true;
