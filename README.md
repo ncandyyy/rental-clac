@@ -5,7 +5,10 @@
 ## Netlify 배포
 
 1. Netlify에서 이 GitHub 저장소를 연결합니다. 빌드 설정은 `netlify.toml`에 들어 있어 따로 입력할 것이 없습니다.
-2. **Project configuration → Environment variables**에 `SITE_PASSWORD`(직원 공용 비밀번호)를 추가하고 다시 배포합니다. 이 값이 없으면 접속이 막힙니다.
+2. **Project configuration → Environment variables**에 비밀번호를 넣고 다시 배포합니다.
+   - `SITE_PASSWORD`: 직원 비밀번호. 견적서 관리와 담당자 대시보드만 보입니다.
+   - `ADMIN_PASSWORD`: 관리자 비밀번호. 제품 금액 관리와 이미지 리스트까지 보이고 수정할 수 있습니다.
+   - `ADMIN_PASSWORD`를 넣지 않으면 `SITE_PASSWORD`가 관리자 권한을 가집니다.
 
 금액표, 저장된 견적, 올린 이미지는 Netlify Blobs에 저장됩니다(별도 설정 없음).
 
