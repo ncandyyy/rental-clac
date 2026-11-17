@@ -439,6 +439,10 @@ button:not(:disabled):active { transform: scale(.96); }
 /* 고객용 링크 페이지 */
 body.customer { padding: 16px 12px 40px; }
 .sheet-fit { width: 100%; max-width: 1011px; margin: 0 auto; }
+.customer-tabs { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin: 0 auto 14px; max-width: 1011px; }
+.customer-tabs:empty { display: none; }
+.customer-tabs button { padding: 10px 18px; border-radius: 20px; background: #fff; color: var(--text2); font-size: 15px; font-weight: 600; border: 1px solid var(--line); }
+.customer-tabs button.on { background: var(--text); color: #fff; border-color: var(--text); }
 .customer-actions { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
 .customer-actions .btn { padding: 12px 16px; font-size: 13px; }
 
