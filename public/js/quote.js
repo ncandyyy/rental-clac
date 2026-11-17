@@ -154,7 +154,7 @@ PAGES.quote = function renderQuotePage() {
               <button class="btn" id="imgReset" onclick="resetQuoteImages()" hidden>자동으로 되돌리기</button>
             </div>
           </div>
-          <div class="panel"><div class="dropzone" id="photoList"></div></div>
+          <div class="panel"><div class="dropzone" id="photoList" tabindex="0" aria-label="제품 이미지 영역. 선택한 뒤 Ctrl+V로 붙여넣을 수 있습니다."></div></div>
         </div>
 
         <div class="card two" id="foldNotes">
@@ -326,7 +326,7 @@ function renderResult() {
     || `<div class="empty">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
         <b>사진을 여기로 드래그 앤 드롭</b>
-        <span>복사한 이미지는 Ctrl+V로 붙여넣을 수 있습니다.</span>
+        <span>이 상자를 클릭한 뒤 Ctrl+V로 복사한 이미지를 붙여넣을 수 있습니다.</span>
         <span>장비를 선택하면 등록된 제품 사진이 자동으로 들어옵니다.</span>
       </div>`;
   $('photoList').classList.toggle('is-empty', !images.length);
