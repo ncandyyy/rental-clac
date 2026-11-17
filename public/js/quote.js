@@ -122,10 +122,7 @@ PAGES.quote = function renderQuotePage() {
 
     <div class="cols">
       <div class="col-left">
-        <div>
-          <p class="title">장비 선택</p>
-          <p class="sub" style="margin-top:6px">장비를 누르면 견적 내역에 담깁니다. 수량은 오른쪽 견적 내역에서 바꿀 수 있습니다.</p>
-        </div>
+        <p class="title">장비 선택</p>
         <div class="chip-list" id="chipList"></div>
       </div>
 
@@ -137,8 +134,7 @@ PAGES.quote = function renderQuotePage() {
             <thead><tr><th class="mv"></th><th style="width:96px">항목</th><th>설명</th><th class="num" style="width:96px">단가</th><th style="width:118px">수량</th><th style="width:58px">단위</th><th class="num" style="width:104px">금액</th><th class="ac"></th></tr></thead>
             <tbody id="lineBody"></tbody>
           </table>
-          <div class="row" style="padding:10px 0"><button class="btn" onclick="addManual()">+ 항목 직접 추가</button>
-            <span class="sub">항목·설명·단가·수량·단위·금액을 직접 적을 수 있습니다. ↑↓로 순서를 바꿉니다.</span></div>
+          <div class="row" style="padding:10px 0"><button class="btn" onclick="addManual()">+ 항목 직접 추가</button></div>
           <div class="sum dashed"><div><span>총</span><span id="tList"></span></div></div>
           <div class="sum">
             <div><span>세트 할인</span><span id="tSet"></span></div>
@@ -199,6 +195,7 @@ PAGES.quote = function renderQuotePage() {
     </div>`;
   $('qNotes').value = quoteNotes().join('\n');
   renderRecipients();
+  setupLineDrag();
   renderPicks();
 };
 
@@ -221,7 +218,7 @@ function renderRecipients() {
       ${i === 0
         ? '<button class="btn icon" onclick="addRecipient()" title="수신자 추가" aria-label="수신자 추가">＋</button>'
         : `<button class="btn icon" onclick="removeRecipient(${i})" title="이 수신자 빼기" aria-label="수신자 빼기">✕</button>`}
-    </div>`).join('') + (many ? '<p class="sub recip-note">저장하면 수신자마다 견적서가 따로 만들어지고 한 묶음으로 저장됩니다. 저장 뒤에는 대시보드에서 하나씩 수정할 수 있습니다.</p>' : '');
+    </div>`).join('');
 }
 function setRecipient(i, field, value) { quote.recipients[i][field] = value; }
 function addRecipient() {
@@ -254,12 +251,7 @@ function renderPicks() {
       <p>${esc(cat)}</p>
       <div class="chips">${items.map(p => {
         const n = quote.qty[p.id] || 0;
-        const price = p.price ? won(p.price) : '무료';
-        return `<button class="chip big ${n ? 'on' : ''}" onclick="toggleItem(${p.id})">
-          <span class="chip-pic ${p.image ? '' : 'none'}" ${bg(p.image)}></span>
-          <span class="chip-text"><b>${esc(p.name)}</b><span>${price}${p.max ? ` · 최대 ${p.max}${p.unit || '개'}` : ''}</span></span>
-          ${n ? `<span class="chip-n">${n > 1 ? '×' + n : '✓'}</span>` : ''}
-        </button>`;
+        return `<button class="chip ${n ? 'on' : ''}" onclick="toggleItem(${p.id})"><span><b>${esc(p.name)}</b>(${won(p.price)})${n > 1 ? ' ×' + n : ''}</span>${n ? '<img src="/img/ui/x.svg" alt="빼기">' : ''}</button>`;
       }).join('')}</div>
     </div>`).join('');
   renderResult();
@@ -290,10 +282,9 @@ function renderResult() {
       <input type="number" min="0" value="${l.qty}" onchange="${onSet}(this.value)" onkeydown="if (event.key === 'Enter') this.blur()">
       <button onclick="${onSet}(${l.qty + 1})" aria-label="더하기">＋</button>
     </div>`;
-  const last = r.lines.length - 1;
   $('lineBody').innerHTML = r.lines.map((l, i) => {
     const k = esc(l.key);
-    const move = `<td class="mv"><button onclick="moveLine('${k}', -1)" ${i ? '' : 'disabled'} aria-label="위로">↑</button><button onclick="moveLine('${k}', 1)" ${i < last ? '' : 'disabled'} aria-label="아래로">↓</button></td>`;
+    const move = `<td class="mv"><span class="grip" title="끌어서 순서 바꾸기" aria-label="끌어서 순서 바꾸기">⋮⋮</span></td>`;
     if (l.kind === 'manual') {
       const m = quote.manual.find(x => x.key === l.key);
       return `<tr class="manual" data-key="${k}">${move}
@@ -409,13 +400,49 @@ function removeLine(key) {
   else return setItemQty(Number(key.split(':')[1]), 0);
   renderResult();
 }
-function moveLine(key, delta) {
-  const order = current().lines.map(x => x.key);
-  const i = order.indexOf(key), j = i + delta;
-  if (i < 0 || j < 0 || j >= order.length) return;
-  [order[i], order[j]] = [order[j], order[i]];
-  quote.order = order;
-  renderResult();
+// 줄 왼쪽 손잡이(⋮⋮)를 끌어서 순서를 바꾼다
+function setupLineDrag() {
+  const body = $('lineBody');
+  let dragKey = null;
+  const clearMarks = () => body.querySelectorAll('.drop-before, .drop-after, .dragging').forEach(tr => tr.classList.remove('drop-before', 'drop-after', 'dragging'));
+  const target = e => {
+    const tr = e.target.closest('tr[data-key]');
+    if (!tr || tr.dataset.key === dragKey) return null;
+    const box = tr.getBoundingClientRect();
+    return { tr, after: e.clientY > box.top + box.height / 2 };
+  };
+  body.addEventListener('mousedown', e => { const grip = e.target.closest('.grip'); if (grip) grip.closest('tr').draggable = true; });
+  body.addEventListener('dragstart', e => {
+    const tr = e.target.closest('tr[data-key]');
+    if (!tr?.draggable) return;
+    dragKey = tr.dataset.key;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragKey);
+    tr.classList.add('dragging');
+  });
+  body.addEventListener('dragover', e => {
+    if (!dragKey) return;
+    e.preventDefault();
+    body.querySelectorAll('.drop-before, .drop-after').forEach(tr => tr.classList.remove('drop-before', 'drop-after'));
+    const t = target(e);
+    if (t) t.tr.classList.add(t.after ? 'drop-after' : 'drop-before');
+  });
+  body.addEventListener('drop', e => {
+    if (!dragKey) return;
+    e.preventDefault();
+    const t = target(e);
+    if (t) {
+      const order = current().lines.map(x => x.key).filter(k => k !== dragKey);
+      order.splice(order.indexOf(t.tr.dataset.key) + (t.after ? 1 : 0), 0, dragKey);
+      quote.order = order;
+    }
+    dragKey = null;
+    renderResult();
+  });
+  body.addEventListener('dragend', () => {
+    dragKey = null; clearMarks();
+    body.querySelectorAll('tr[draggable]').forEach(tr => tr.removeAttribute('draggable'));
+  });
 }
 
 function applySpecial() {
