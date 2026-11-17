@@ -48,14 +48,18 @@ input[type=number] { -moz-appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; min-height: 44px; font-weight: 600; font-size: 15px; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; min-height: 44px; font-weight: 600; font-size: 15px; border-radius: 6px;
   background: var(--fill); color: var(--text2); white-space: nowrap; text-decoration: none;
 }
+.btn { background: var(--fill); color: var(--text2); }   /* 기본 버튼: 회색 */
 .btn:hover { background: var(--line); }
-.btn.dark { background: var(--text); color: var(--bg); }
+.btn.dark { background: var(--text); color: #fff; }
 .btn.dark:hover { background: #222a35; }
 .btn.danger { color: var(--brand); }
 .btn.white { background: var(--card); }
+.btn.white:hover { background: var(--line); }
+.basic.card .btn.white { background: var(--fill); }
+.basic.card .btn.white:hover { background: var(--line); }
 .btn-big { width: 100%; height: 52px; border-radius: 8px; background: var(--text); color: var(--bg); font-weight: 700; font-size: 18px; }
 .btn-big:hover { background: #222a35; }
 .btn-big:disabled { opacity: .5; cursor: default; }
@@ -186,7 +190,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .photo { position: relative; width: 92px; }
 .photo div { width: 92px; height: 92px; border-radius: 4px; background: var(--bg) center/contain no-repeat; }
 .photo p { margin-top: 4px; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.photo button { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 9px; background: var(--text); color: #fff; font-size: 15px; line-height: 18px; }
+.photo button { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 11px; background: rgba(255,255,255,.92); color: var(--text2); display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
 .notes-edit { width: 100%; height: 100%; min-height: 208px; resize: vertical; border: 1px solid transparent; border-radius: 8px; background: var(--bg); padding: 16px; color: var(--text2); line-height: 1.7; outline: none; }
 
 .stepper button img { width: 36px; height: 36px; }
@@ -302,7 +306,7 @@ button:not(:disabled):active { transform: scale(.96); }
 .list tbody tr.tbd:hover td { background: #fff6d6; }
 .img-card:hover { background: var(--fill); }
 .fold-head:hover { color: var(--text); }
-.photo button:hover { background: var(--brand); }
+.photo button:hover { background: #fff; color: var(--brand); }
 .modal .close:hover { background: var(--line); }
 .url-row a:hover { text-decoration: underline; }
 
@@ -318,8 +322,8 @@ button:not(:disabled):active { transform: scale(.96); }
 /* 수신자 줄 */
 .recips { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .recip { display: flex; align-items: center; gap: 13px; flex-wrap: wrap; justify-content: flex-end; }
-.btn.icon { width: 40px; min-height: 40px; padding: 0; font-size: 18px; background: var(--card); }
-.btn.icon:hover { background: var(--line); }
+.btn.icon { width: 40px; min-height: 40px; padding: 0; color: var(--text2); }
+.btn.icon svg, .qtable td.ac svg { display: block; }
 
 /* 장비 선택 칩 */
 .chip-list { display: flex; flex-direction: column; gap: 8px; }
@@ -335,7 +339,7 @@ button:not(:disabled):active { transform: scale(.96); }
 .qtable tr.drop-before td { box-shadow: inset 0 2px 0 var(--text); }
 .qtable tr.drop-after td { box-shadow: inset 0 -2px 0 var(--text); }
 .qtable th.ac, .qtable td.ac { width: 64px; text-align: right; white-space: nowrap; }
-.qtable td.ac button { width: 28px; height: 28px; border-radius: 4px; color: var(--muted); }
+.qtable td.ac button { width: 28px; height: 28px; border-radius: 4px; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; }
 .qtable td.ac button:hover { background: var(--fill); color: var(--text); }
 .qtable td { vertical-align: middle; }
 .qtable tr.manual td { background: #fbfcfd; }
@@ -355,7 +359,11 @@ button:not(:disabled):active { transform: scale(.96); }
 .list tr.grp:not(.grp-end) td { border-bottom-color: #e8edf8; }
 
 /* 인사말 */
-.greeting { font-size: 20px; font-weight: 700; color: var(--text); }
+.greeting { font-size: 20px; font-weight: 700; color: var(--text); padding: 16px 0 14px; }
+/* 기본 정보 입력: 흰 박스로 묶고 입력칸은 회색 */
+.basic.card { padding: 20px 24px; gap: 18px; }
+.basic.card .field input, .basic.card .field select { background: var(--fill); }
+.basic.card .field input:focus { background: #e9edf1; }
 
 /* 붙여넣기 받을 곳으로 선택된 상태 (색과 안내 문구로만 표시) */
 .dropzone { cursor: pointer; }

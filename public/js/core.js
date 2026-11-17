@@ -13,6 +13,13 @@ const $ = id => document.getElementById(id);
 const nextId = list => list.reduce((m, x) => Math.max(m, x.id), 0) + 1;
 const itemById = id => db.items.find(x => x.id === Number(id));
 const today = () => new Date().toLocaleDateString('sv-SE');   // YYYY-MM-DD
+// 버튼 아이콘 (같은 굵기의 선 아이콘으로 통일)
+const svg = (d, size = 16) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  plus: s => svg('<path d="M12 5v14M5 12h14"/>', s),
+  x: s => svg('<path d="M6 6l12 12M18 6L6 18"/>', s),
+  edit: s => svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>', s),
+};
 const bg = url => url ? `style="background-image:url('${esc(url)}')"` : '';
 
 // ───────── 서버 통신 / 로그인 ─────────

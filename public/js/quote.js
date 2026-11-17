@@ -98,8 +98,8 @@ function snapshot(rcp = quote.recipients[0]) {
 // ───────── 화면 ─────────
 PAGES.quote = function renderQuotePage() {
   $('page-quote').innerHTML = `
-    <div class="basic">
-      <p class="greeting">${role === 'admin' ? '관리자' : '직원'}님, 반갑습니다.</p>
+    <p class="greeting">${role === 'admin' ? '관리자' : '직원'}님, 반갑습니다.</p>
+    <div class="basic card">
       <div class="row between">
         <p class="title">기본 정보 입력</p>
         <div class="row">
@@ -217,8 +217,8 @@ function renderRecipients() {
       <label class="field">고객 성함 <input placeholder="입력" value="${esc(r.name)}" oninput="setRecipient(${i}, 'name', this.value)"></label>
       <label class="field">연락처 <input placeholder="숫자만 입력" inputmode="tel" maxlength="13" value="${esc(r.phone)}" oninput="this.value = formatPhone(this.value); setRecipient(${i}, 'phone', this.value)"></label>
       ${i === 0
-        ? '<button class="btn icon" onclick="addRecipient()" title="수신자 추가" aria-label="수신자 추가">＋</button>'
-        : `<button class="btn icon" onclick="removeRecipient(${i})" title="이 수신자 빼기" aria-label="수신자 빼기">✕</button>`}
+        ? `<button class="btn icon" onclick="addRecipient()" title="수신자 추가" aria-label="수신자 추가">${ICON.plus(18)}</button>`
+        : `<button class="btn icon" onclick="removeRecipient(${i})" title="이 수신자 빼기" aria-label="수신자 빼기">${ICON.x(18)}</button>`}
     </div>`).join('');
 }
 function setRecipient(i, field, value) { quote.recipients[i][field] = value; }
@@ -295,7 +295,7 @@ function renderResult() {
         <td>${qtyCell(l, `setManualQty.bind(null, '${k}')`)}</td>
         <td><input class="cell" value="${esc(m.uom)}" placeholder="개" oninput="editManual('${k}', 'uom', this)"></td>
         <td><input class="cell num" type="number" value="${m.amount || ''}" placeholder="0" data-amount oninput="editManual('${k}', 'amount', this)"></td>
-        <td class="ac"><button onclick="removeLine('${k}')" title="줄 삭제" aria-label="줄 삭제">✕</button></td>
+        <td class="ac"><button onclick="removeLine('${k}')" title="줄 삭제" aria-label="줄 삭제">${ICON.x(15)}</button></td>
       </tr>`;
     }
     const setter = l.kind === 'set' ? 'setSetQty' : `setItemQty.bind(null, ${l.itemId})`;
@@ -306,7 +306,7 @@ function renderResult() {
       <td>${qtyCell(l, setter)}</td>
       <td>${esc(l.uom)}</td>
       <td class="num">${num(l.list)} 원</td>
-      <td class="ac"><button onclick="convertLine('${k}')" title="직접 수정" aria-label="직접 수정">✎</button><button onclick="removeLine('${k}')" title="줄 삭제" aria-label="줄 삭제">✕</button></td>
+      <td class="ac"><button onclick="convertLine('${k}')" title="직접 수정" aria-label="직접 수정">${ICON.edit(15)}</button><button onclick="removeLine('${k}')" title="줄 삭제" aria-label="줄 삭제">${ICON.x(15)}</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" class="empty">왼쪽에서 장비를 선택하거나 항목을 직접 추가하세요.</td></tr>';
   renderTotals(r);
@@ -328,7 +328,7 @@ function renderTotals(r = current()) {
   const images = quoteImages(r);
   $('photoList').innerHTML = images.map(i => `
     <div class="photo"><div ${bg(i.url)}></div><p title="${esc(i.name)}">${esc(i.name)}</p>
-      <button onclick="removeQuoteImage('${esc(i.url)}')" aria-label="사진 빼기">✕</button></div>`).join('')
+      <button onclick="removeQuoteImage('${esc(i.url)}')" title="사진 빼기" aria-label="사진 빼기">${ICON.x(12)}</button></div>`).join('')
     || `<div class="empty">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
         <b>사진을 여기로 드래그 앤 드롭</b>
